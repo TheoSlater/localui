@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A localui application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/localui.exe %u
+Terminal=false
+Type=Application
+Icon=localui.exe
+Categories=Utility;
+StartupWMClass=localui.exe
+
+ 

@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "fi": "npm --prefix frontend install",
+    "fadd": "npm --prefix frontend install",
+    "fdev": "npm --prefix frontend run dev",
+    "dev": "wails3 dev",
+    "fbuild": "npm --prefix frontend run build",
+    "flint": "npm --prefix frontend run lint"
+  }
+}
