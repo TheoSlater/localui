@@ -1,6 +1,8 @@
 import { ChatComposer } from '@/components/shared/chat-composer';
-import type { ChatMessage } from '@/hooks/use-chat';
+import type { ChatMessage } from '@/stores/chat-store';
 import { VirtualMessageList } from '@/components/shared/virtual-message-list';
+import { TechnicalContent } from '@/components/shared/technical-content';
+import { ThinkingReasoning } from '@/ThinkingReasoning';
 
 function getBubbleTextColor(hex: string) {
   const value = hex.replace('#', '');
@@ -14,8 +16,10 @@ interface ChatWorkspaceProps {
   messages: ChatMessage[];
   userBubbleColor: string;
   isLoading: boolean;
-  onSubmit: (content: string) => void;
+  onSubmit: () => void;
   onStop: () => void;
+  input: string;
+  onValueChange: (value: string) => void;
 }
 
 export function ChatWorkspace({
@@ -24,23 +28,34 @@ export function ChatWorkspace({
   isLoading,
   onSubmit,
   onStop,
+  input,
+  onValueChange,
 }: ChatWorkspaceProps) {
   return (
-    <div className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 px-4 py-16 pb-44">
+    <div className="animate-in fade-in-0 relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden duration-(--motion-duration-fast) ease-(--motion-ease-spring)">
+      <div className="min-h-0 flex-1 px-4 pt-14 pb-44">
         <VirtualMessageList
           items={messages}
           getItemKey={(message) => message.id}
           renderItem={(message) => (
-            <div className="mx-auto flex w-full max-w-2xl justify-end pb-5">
+            <div
+              className={`animate-in fade-in-0 zoom-in-[var(--motion-scale-tooltip)] slide-in-from-bottom-1 mx-auto flex w-full max-w-2xl pb-7 duration-(--motion-duration-fast) ease-(--motion-ease-spring) ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
               <div
-                className="max-w-[80%] rounded-[20px] rounded-br-sm px-4 py-2.5 text-[15px] leading-6 shadow-sm"
-                style={{
-                  backgroundColor: userBubbleColor,
-                  color: getBubbleTextColor(userBubbleColor),
-                }}
+                className={`text-[15px] leading-6 whitespace-pre-wrap ${message.role === 'user' ? 'max-w-[80%] rounded-[20px] px-4 py-2.5 shadow-sm' : 'w-full'}`}
+                style={
+                  message.role === 'user'
+                    ? {
+                        backgroundColor: userBubbleColor,
+                        color: getBubbleTextColor(userBubbleColor),
+                      }
+                    : undefined
+                }
               >
-                {message.content}
+                {message.role === 'assistant' && (message.streaming || message.reasoning) && (
+                  <ThinkingReasoning reasoning={message.reasoning} streaming={message.streaming} />
+                )}
+                <TechnicalContent content={message.content} streaming={message.streaming} />
               </div>
             </div>
           )}
@@ -48,7 +63,13 @@ export function ChatWorkspace({
       </div>
       <div className="from-background via-background/90 pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t to-transparent px-4 pt-8 pb-6">
         <div className="pointer-events-auto mx-auto flex w-full max-w-2xl flex-col gap-3">
-          <ChatComposer isLoading={isLoading} onSubmit={onSubmit} onStop={onStop} />
+          <ChatComposer
+            value={input}
+            onValueChange={onValueChange}
+            isLoading={isLoading}
+            onSubmit={onSubmit}
+            onStop={onStop}
+          />
         </div>
       </div>
     </div>

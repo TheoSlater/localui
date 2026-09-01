@@ -1,29 +1,61 @@
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/shared/app-sidebar';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { ModelSelector } from '@/components/shared/model-selector';
+import type { TextProvider } from '@/config/settings';
+import type { Chat } from '@/services/chat';
 
 interface AppLayoutProps {
   children: React.ReactNode;
+  providers: TextProvider[];
+  activeModel: string;
+  onModelSelect: (providerId: string, modelId: string) => void;
   onNewChat?: () => void;
-  bubbleColor: string;
-  onBubbleColorChange: (color: string) => void;
   onSettings?: () => void;
+  chats?: Chat[];
+  selectedChatId?: string;
+  onSelectChat?: (id: string) => void;
+  onRenameChat?: (chat: Chat) => void;
+  onDeleteChat?: (id: string) => void;
 }
 
 export function AppLayout({
   children,
   onNewChat,
-  bubbleColor,
-  onBubbleColorChange,
+  providers,
+  activeModel,
+  onModelSelect,
   onSettings,
+  chats,
+  selectedChatId,
+  onSelectChat,
+  onRenameChat,
+  onDeleteChat,
 }: AppLayoutProps) {
   return (
     <SidebarProvider>
-      <AppSidebar onNewChat={onNewChat} onSettings={onSettings} />
+      <AppSidebar
+        onNewChat={onNewChat}
+        onSettings={onSettings}
+        chats={chats}
+        selectedChatId={selectedChatId}
+        onSelectChat={onSelectChat}
+        onRenameChat={onRenameChat}
+        onDeleteChat={onDeleteChat}
+      />
       <SidebarInset className="relative min-h-svh">
-        <div className="absolute top-2 right-2 flex items-center gap-1">
-          <ThemeToggle />
-        </div>
+        <header className="pointer-events-none absolute inset-x-0 top-2 z-20 flex items-center justify-between px-2">
+          <div className="pointer-events-auto">
+            <ModelSelector
+              providers={providers}
+              activeModel={activeModel}
+              onSelect={onModelSelect}
+            />
+          </div>
+          <div className="pointer-events-auto">
+            <ThemeToggle />
+          </div>
+        </header>
         {children}
       </SidebarInset>
     </SidebarProvider>

@@ -5,7 +5,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ userName, children }: EmptyStateProps) {
   return (
-    <div className="flex min-h-svh items-center justify-center p-4">
+    <div className="animate-in fade-in-0 flex min-h-svh items-center justify-center p-4 duration-(--motion-duration-fast) ease-(--motion-ease-spring)">
       <div className="w-full max-w-2xl space-y-4">
         <p className="text-muted-foreground text-center text-lg">Hello, {userName}</p>
         {children}

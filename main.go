@@ -2,8 +2,12 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
 
+	"changeme/internal/chat"
+	"changeme/internal/database"
+	"changeme/internal/providers"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -19,12 +23,19 @@ var assets embed.FS
 // application, creates a window, and runs the application, logging any error
 // that might occur.
 func main() {
+	db, err := database.Open("")
+	if err != nil {
+		log.Fatal(err)
+	}
+	chatService := chat.NewService(db)
+	providerService := providers.NewService(db)
 	app := application.New(application.Options{
 		Name:        "localui",
 		Description: "localui",
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
+		Services: []application.Service{application.NewService(chatService), application.NewService(providerService)},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
@@ -43,8 +54,8 @@ func main() {
 		URL:              "/",
 	})
 
-	err := app.Run()
+	err = app.Run()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(fmt.Errorf("run application: %w", err))
 	}
 }
