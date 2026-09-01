@@ -1,56 +1,48 @@
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { AppSidebar } from '@/components/shared/app-sidebar';
-import { ThemeToggle } from '@/components/shared/theme-toggle';
-import {
-  PromptInput,
-  PromptInputTextarea,
-  PromptInputActions,
-  PromptInputAction,
-} from './components/ui/prompt-input';
-import { Button } from './components/ui/button';
-import { Square, ArrowUp } from 'lucide-react';
+import { AppLayout } from '@/components/shared/app-layout';
+import { ChatWorkspace } from '@/components/shared/chat-workspace';
+import { EmptyState } from '@/components/shared/empty-state';
+import { ChatComposer } from '@/components/shared/chat-composer';
+import { useChat } from '@/hooks/use-chat';
+import { useSettingsStore } from '@/stores/settings-store';
+import { SettingsDialog } from '@/components/shared/settings-dialog';
 import { useState } from 'react';
 
 function App() {
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleSubmit = async () => {
-    setIsLoading(true);
-  };
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { messages, isLoading, handleSubmit, handleStop, resetChat } = useChat();
+  const name = useSettingsStore((s) => s.name);
+  const bubbleColor = useSettingsStore((s) => s.userBubbleColor);
+  const setSettings = useSettingsStore((s) => s.setSettings);
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-
-      <SidebarInset className="relative min-h-svh">
-        <div className="absolute top-2 right-2">
-          <ThemeToggle />
-        </div>
-
-        <div className="flex min-h-svh items-center justify-center p-4">
-          <PromptInput className="bg-background w-full max-w-2xl">
-            <PromptInputTextarea placeholder="Ask anything" className="bg-transparent" />
-
-            <PromptInputActions className="justify-end pt-2">
-              <PromptInputAction tooltip={isLoading ? 'Stop generation' : 'Send message'}>
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="h-8 w-8 rounded-full"
-                  onClick={handleSubmit}
-                >
-                  {isLoading ? (
-                    <Square className="size-5 fill-current" />
-                  ) : (
-                    <ArrowUp className="size-5" />
-                  )}
-                </Button>
-              </PromptInputAction>
-            </PromptInputActions>
-          </PromptInput>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <AppLayout
+      onNewChat={resetChat}
+      onSettings={() => setSettingsOpen(true)}
+      bubbleColor={bubbleColor}
+      onBubbleColorChange={(userBubbleColor) => setSettings({ userBubbleColor })}
+    >
+      {messages.length === 0 ? (
+        <EmptyState userName={name}>
+          <ChatComposer isLoading={isLoading} onSubmit={handleSubmit} onStop={handleStop} />
+        </EmptyState>
+      ) : (
+        <ChatWorkspace
+          messages={messages}
+          userBubbleColor={bubbleColor}
+          isLoading={isLoading}
+          onSubmit={handleSubmit}
+          onStop={handleStop}
+        />
+      )}
+      <SettingsDialog
+        open={settingsOpen}
+        name={name}
+        bubbleColor={bubbleColor}
+        onNameChange={(name) => setSettings({ name })}
+        onBubbleColorChange={(userBubbleColor) => setSettings({ userBubbleColor })}
+        onClose={() => setSettingsOpen(false)}
+      />
+    </AppLayout>
   );
 }
 
