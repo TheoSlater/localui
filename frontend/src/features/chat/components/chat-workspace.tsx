@@ -1,11 +1,16 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, RefreshCw } from 'lucide-react';
+import { Check, Copy } from 'lucide';
+import { MorphIcon } from 'morphicons/react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChatComposer } from './chat-composer';
-import type { ChatMessage } from '@/stores/chat-store';
+import { useChatStore, type ChatMessage } from '@/stores/chat-store';
 import { VirtualMessageList } from '@/components/shared/virtual-message-list';
 import { StreamingMarkdown, TechnicalContent } from './technical-content';
 import { ThinkingReasoning } from './thinking-reasoning';
+import { notifications } from '@/services/notifications';
+import { getUserFacingError } from '@/lib/error-message';
 
 function getBubbleTextColor(hex: string) {
   const value = hex.replace('#', '');
@@ -19,14 +24,35 @@ const MessageBubble = memo(function MessageBubble({
   message,
   userBubbleColor,
   userTextColor,
+  isLatestAssistant,
+  onRegenerate,
 }: {
   message: ChatMessage;
   userBubbleColor: string;
   userTextColor: string;
+  isLatestAssistant: boolean;
+  onRegenerate: (messageId: string) => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const copyText = useCallback(() => {
+    void navigator.clipboard
+      .writeText(message.content)
+      .then(() => {
+        setCopied(true);
+        notifications.success('Copied', 'Message text copied to the clipboard.');
+        window.setTimeout(() => setCopied(false), 1400);
+      })
+      .catch((error) =>
+        notifications.error(
+          'Unable to copy',
+          getUserFacingError(error, 'Could not copy message text.'),
+        ),
+      );
+  }, [message.content]);
+
   return (
     <div
-      className={`mx-auto flex w-full max-w-2xl pb-7 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      className={`group/message mx-auto flex w-full max-w-2xl flex-col pb-7 ${message.role === 'user' ? 'items-end' : 'items-start'}`}
     >
       <div
         className={`text-[15px] leading-6 whitespace-pre-wrap ${message.role === 'user' ? 'max-w-[80%] rounded-[20px] px-4 py-2.5 shadow-sm' : 'w-full'}`}
@@ -48,6 +74,58 @@ const MessageBubble = memo(function MessageBubble({
           <TechnicalContent content={message.content} streaming={false} />
         )}
       </div>
+      {message.content && (!message.streaming || message.role === 'user') && (
+        <TooltipProvider delay={300}>
+          <div
+            className="message-actions mt-1 flex w-fit items-center justify-start gap-1"
+            data-latest={isLatestAssistant}
+          >
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={copied ? 'Copied' : 'Copy text'}
+                    onClick={copyText}
+                    className="text-muted-foreground hover:text-foreground"
+                  />
+                }
+              >
+                <MorphIcon
+                  icon={copied ? Check : Copy}
+                  size={16}
+                  strokeWidth={2}
+                  reducedMotion="user"
+                  spring="snappy"
+                  className={copied ? 'text-emerald-500' : undefined}
+                />
+              </TooltipTrigger>
+              <TooltipContent>{copied ? 'Copied' : 'Copy text'}</TooltipContent>
+            </Tooltip>
+            {message.role === 'assistant' && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Regenerate"
+                      onClick={() => onRegenerate(message.id)}
+                      className="text-muted-foreground hover:text-foreground"
+                    />
+                  }
+                >
+                  <RefreshCw />
+                </TooltipTrigger>
+                <TooltipContent>Regenerate</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
+      )}
     </div>
   );
 });
@@ -77,19 +155,36 @@ export function ChatWorkspace({
   submitError = null,
   onOpenSettings,
 }: ChatWorkspaceProps) {
+  const regenerateMessage = useChatStore((s) => s.regenerateMessage);
   const userTextColor = useMemo(() => getBubbleTextColor(userBubbleColor), [userBubbleColor]);
   const [atBottom, setAtBottom] = useState(true);
   const [scrollToBottomRequest, setScrollToBottomRequest] = useState(0);
   const getItemKey = useCallback((m: ChatMessage) => m.id, []);
+  const latestAssistantId = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === 'assistant' && !message.streaming && message.content) return message.id;
+    }
+    return undefined;
+  }, [messages]);
   const renderItem = useCallback(
     (message: ChatMessage) => (
       <MessageBubble
         message={message}
         userBubbleColor={userBubbleColor}
         userTextColor={userTextColor}
+        isLatestAssistant={message.id === latestAssistantId}
+        onRegenerate={(messageId) =>
+          void regenerateMessage(messageId).catch((error) =>
+            notifications.error(
+              'Unable to regenerate',
+              getUserFacingError(error, 'Could not regenerate this response.'),
+            ),
+          )
+        }
       />
     ),
-    [userBubbleColor, userTextColor],
+    [latestAssistantId, regenerateMessage, userBubbleColor, userTextColor],
   );
   const handleSubmit = useCallback(() => {
     setScrollToBottomRequest((value) => value + 1);

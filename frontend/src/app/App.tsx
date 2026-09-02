@@ -10,10 +10,19 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { SettingsDialog } from '@/features/settings/components/settings-dialog';
 import { useState } from 'react';
 import { useProviderSync } from '@/features/providers/hooks/use-provider-sync';
+import { ConfirmationDialog } from '@/components/shared/confirmation-dialog';
+import { getUserFacingError } from '@/lib/error-message';
+import { notifications } from '@/services/notifications';
+
+type PendingConfirmation =
+  | { kind: 'chat'; id: string }
+  | { kind: 'all-chats' }
+  | { kind: 'provider'; id: string; name: string };
 
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [renamingChat, setRenamingChat] = useState<Chat | undefined>();
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation>();
   const chats = useChatStore((s) => s.chats);
   const generatingChatIds = useChatStore((s) => s.generatingChatIds);
   const selectedChatId = useChatStore((s) => s.selectedChatId);
@@ -24,7 +33,12 @@ function App() {
   const deleteChat = useChatStore((s) => s.deleteChat);
   const deleteAllChats = useChatStore((s) => s.deleteAllChats);
   useEffect(() => {
-    void loadChats();
+    void loadChats().catch((error) =>
+      notifications.error(
+        'Unable to load chats',
+        getUserFacingError(error, 'Could not load chats.'),
+      ),
+    );
   }, [loadChats]);
   const name = useSettingsStore((s) => s.name);
   const bubbleColor = useSettingsStore((s) => s.userBubbleColor);
@@ -47,16 +61,31 @@ function App() {
   } = useProviderSync({ settingsOpen });
 
   const handleDeleteAllChats = useCallback(() => {
-    if (!chats.length || !window.confirm('Delete all chats? This cannot be undone.')) return;
-    void deleteAllChats().catch((error) => console.error('Unable to delete all chats', error));
-  }, [chats.length, deleteAllChats]);
+    if (chats.length) setPendingConfirmation({ kind: 'all-chats' });
+  }, [chats.length]);
 
-  const onSelectChat = useCallback((id: string) => void selectChat(id), [selectChat]);
-  const onDeleteChat = useCallback(
+  const onSelectChat = useCallback(
     (id: string) => {
-      if (window.confirm('Delete this chat?')) void deleteChat(id);
+      void selectChat(id).catch((error) =>
+        notifications.error(
+          'Unable to open chat',
+          getUserFacingError(error, 'Could not open chat.'),
+        ),
+      );
     },
-    [deleteChat],
+    [selectChat],
+  );
+  const onDeleteChat = useCallback((id: string) => {
+    setPendingConfirmation({ kind: 'chat', id });
+  }, []);
+  const onDeleteProvider = useCallback(
+    (id: string) => {
+      const provider = providers.find((item) => item.id === id);
+      if (provider && providers.length > 1) {
+        setPendingConfirmation({ kind: 'provider', id, name: provider.name || 'this provider' });
+      }
+    },
+    [providers],
   );
   const onSettings = useCallback(() => setSettingsOpen(true), []);
 
@@ -92,7 +121,7 @@ function App() {
         onApiKeyChange={setApiKey}
         onApiKeySave={onApiKeySave}
         onApiKeyRemove={onApiKeyRemove}
-        onDeleteProvider={handleDeleteProvider}
+        onDeleteProvider={onDeleteProvider}
         onCreateProvider={createProvider}
         hasChats={chats.length > 0}
         onDeleteAllChats={handleDeleteAllChats}
@@ -105,7 +134,53 @@ function App() {
         chat={renamingChat}
         onClose={() => setRenamingChat(undefined)}
         onSave={(title) => {
-          if (renamingChat) void renameChat(renamingChat.id, title);
+          if (renamingChat) {
+            void renameChat(renamingChat.id, title).catch((error) =>
+              notifications.error(
+                'Unable to rename chat',
+                getUserFacingError(error, 'Could not rename chat.'),
+              ),
+            );
+          }
+        }}
+      />
+      <ConfirmationDialog
+        open={Boolean(pendingConfirmation)}
+        title={
+          pendingConfirmation?.kind === 'provider'
+            ? 'Remove provider?'
+            : pendingConfirmation?.kind === 'all-chats'
+              ? 'Delete all chats?'
+              : 'Delete this chat?'
+        }
+        description={
+          pendingConfirmation?.kind === 'provider'
+            ? `Remove ${pendingConfirmation.name} from this app?`
+            : 'This cannot be undone.'
+        }
+        confirmLabel={pendingConfirmation?.kind === 'provider' ? 'Remove' : 'Delete'}
+        onClose={() => setPendingConfirmation(undefined)}
+        onConfirm={() => {
+          if (!pendingConfirmation) return;
+          if (pendingConfirmation.kind === 'chat') {
+            void deleteChat(pendingConfirmation.id).catch((error) =>
+              notifications.error(
+                'Unable to delete chat',
+                getUserFacingError(error, 'Could not delete chat.'),
+              ),
+            );
+          }
+          if (pendingConfirmation.kind === 'all-chats') {
+            void deleteAllChats().catch((error) =>
+              notifications.error(
+                'Unable to delete chats',
+                getUserFacingError(error, 'Could not delete chats.'),
+              ),
+            );
+          }
+          if (pendingConfirmation.kind === 'provider') {
+            void handleDeleteProvider(pendingConfirmation.id);
+          }
         }}
       />
     </AppLayout>

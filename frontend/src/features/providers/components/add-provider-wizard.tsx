@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { isCompleteHttpUrl, type TextProvider } from '@/config/settings';
+import { getUserFacingError } from '@/lib/error-message';
 import { providerFromPreset, providerPresets, type ProviderPreset } from '../provider-presets';
 
 type WizardProps = {
@@ -53,7 +54,7 @@ export function AddProviderWizard({ open, onClose, onComplete }: WizardProps) {
     setSaving(true);
     void onComplete(providerFromPreset(preset, name.trim() || preset.name, endpoint), apiKey.trim())
       .then(onClose)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Unable to add provider.'))
+      .catch((error) => setError(getUserFacingError(error, 'Unable to add provider.')))
       .finally(() => setSaving(false));
   };
   const back = () => {
@@ -64,6 +65,7 @@ export function AddProviderWizard({ open, onClose, onComplete }: WizardProps) {
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
         showCloseButton={false}
+        resize
         className="bg-background text-foreground w-full max-w-[560px] gap-0 overflow-hidden rounded-2xl border p-0 shadow-2xl sm:!max-w-[560px]"
       >
         <DialogHeader className="flex-row items-start justify-between border-b px-6 py-5">
@@ -196,7 +198,7 @@ export function AddProviderWizard({ open, onClose, onComplete }: WizardProps) {
             </p>
           )}
         </div>
-        <DialogFooter className="bg-muted/20 -mx-0 -mb-0 flex-row items-center justify-between rounded-none px-6 py-4">
+        <DialogFooter className="flex-row items-center justify-between px-6 py-4">
           <Button variant="ghost" onClick={step ? back : onClose}>
             {step ? (
               <>

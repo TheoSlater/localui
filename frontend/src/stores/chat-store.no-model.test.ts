@@ -4,7 +4,7 @@ import { useChatStore, getProviderSetupError, isProviderReady } from './chat-sto
 vi.mock('@/agent/text-generation', async () => {
   const actual =
     await vi.importActual<typeof import('@/agent/text-generation')>('@/agent/text-generation');
-  return { ...actual, streamReply: vi.fn() };
+  return { ...actual, streamReply: vi.fn(), generateChatTitle: vi.fn() };
 });
 vi.mock('@/services/chat', () => ({
   ChatService: {
@@ -31,10 +31,17 @@ vi.mock('@/services/chat', () => ({
 vi.mock('../../bindings/changeme/internal/providers/service', () => ({
   APIKey: vi.fn(async () => 'test-key'),
 }));
+vi.mock('@/services/notifications', () => ({
+  notifications: {
+    error: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
 
-import { streamReply } from '@/agent/text-generation';
+import { generateChatTitle, streamReply } from '@/agent/text-generation';
 import { ChatService } from '@/services/chat';
 import * as ProviderBindings from '../../bindings/changeme/internal/providers/service';
+import { notifications } from '@/services/notifications';
 
 describe('no-model handling - submission blocked, no persistence', () => {
   const chatMessages = new Map<string, any[]>();
@@ -75,6 +82,7 @@ describe('no-model handling - submission blocked, no persistence', () => {
     (streamReply as any).mockImplementation(async function* () {
       yield { type: 'text', text: 'hello assistant' };
     });
+    (generateChatTitle as any).mockResolvedValue('Generated title');
     useChatStore.setState({
       chats: [],
       messages: [],
@@ -217,7 +225,7 @@ describe('no-model handling - submission blocked, no persistence', () => {
     });
     chatMessages.set('chat-1', []);
     (ProviderBindings.APIKey as any).mockResolvedValue('test-key');
-    (streamReply as any).mockImplementation(async function* () {
+    (streamReply as any).mockImplementation(() => {
       throw new Error('Transport failure: network error');
     });
     await useChatStore.getState().submitMessage();
@@ -232,7 +240,13 @@ describe('no-model handling - submission blocked, no persistence', () => {
     // messages should contain user, but no error assistant message
     expect(useChatStore.getState().messages.some((m) => m.role === 'user')).toBe(true);
     expect(useChatStore.getState().messages.some((m) => m.role === 'error')).toBe(false);
-    expect(useChatStore.getState().submitError).toBe('Transport failure: network error');
+    expect(useChatStore.getState().submitError).toBe(
+      'Could not reach provider. Check your connection and provider URL.',
+    );
+    expect(notifications.error).toHaveBeenCalledWith(
+      'Message failed',
+      'Could not reach provider. Check your connection and provider URL.',
+    );
     expect(useChatStore.getState().isLoading).toBe(false);
     // ensure streaming bubble was cleared (no lingering streaming)
     expect(useChatStore.getState().messages.some((m) => m.streaming)).toBe(false);

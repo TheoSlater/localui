@@ -6,6 +6,8 @@ import { fetchAllModels, type ModelItem } from '@/services/models';
 import type { TextProvider } from '@/config/settings';
 import { useSettingsStore } from '@/stores/settings-store';
 import { toast } from '@/components/ui/toast';
+import { getUserFacingError } from '@/lib/error-message';
+import { notifications } from '@/services/notifications';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
@@ -45,11 +47,21 @@ export function ModelSelector({ providers, activeModel, onSelect }: ModelSelecto
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setLoading(true);
-      fetchAllModels(providers).then((items) => {
-        if (cancelled) return;
-        setModels(items);
-        setLoading(false);
-      });
+      void fetchAllModels(providers)
+        .then((items) => {
+          if (!cancelled) setModels(items);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          setModels([]);
+          notifications.error(
+            'Unable to load models',
+            getUserFacingError(error, 'Could not load models from configured providers.'),
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     }, 300);
     return () => {
       cancelled = true;

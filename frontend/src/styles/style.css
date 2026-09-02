@@ -24,6 +24,30 @@ body {
 .technical-content {
   white-space: normal;
 }
+
+/* Shared size interpolation for surfaces whose content changes in place. */
+.resize-transition {
+  transition:
+    width var(--motion-duration-panel) var(--motion-ease-spring),
+    height var(--motion-duration-panel) var(--motion-ease-spring);
+  will-change: width, height;
+}
+
+.resize-transition[data-slot='sheet-content'] {
+  transition:
+    opacity var(--motion-duration-panel) var(--motion-ease-spring),
+    transform var(--motion-duration-panel) var(--motion-ease-spring),
+    width var(--motion-duration-panel) var(--motion-ease-spring),
+    height var(--motion-duration-panel) var(--motion-ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resize-transition {
+    transition: none !important;
+    will-change: auto;
+  }
+}
+
 .technical-content :where(p, ul, ol, pre, blockquote, h1, h2, h3) {
   margin: 0.65rem 0;
 }
@@ -53,6 +77,43 @@ body {
 }
 .technical-content > p:only-child {
   margin: 0;
+}
+
+.message-actions > * {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-spring),
+    transform var(--motion-duration-fast) var(--motion-ease-spring);
+}
+
+.message-actions[data-latest='true'] > *,
+.group\/message:hover .message-actions > *,
+.group\/message:focus-within .message-actions > * {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.message-actions[data-latest='true'] > * {
+  animation: message-action-in var(--motion-duration-fast) var(--motion-ease-spring) both;
+  animation-delay: 0ms;
+}
+
+.message-actions[data-latest='true'] > *:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+@keyframes message-action-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .technical-content table {
@@ -92,16 +153,18 @@ body {
 @keyframes provider-wizard-step-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    filter: blur(6px);
+    transform: translateY(6px) scale(0.99);
   }
   to {
     opacity: 1;
+    filter: blur(0);
     transform: translateY(0);
   }
 }
 
 .provider-wizard-step {
-  animation: provider-wizard-step-in var(--motion-duration-quick) var(--motion-ease-spring);
+  animation: provider-wizard-step-in var(--motion-duration-fast) var(--motion-ease-spring) both;
 }
 
 .translucent-surface {
@@ -309,6 +372,7 @@ body {
 }
 
 * {
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: oklch(0.8 0 0 / 40%) transparent;
 }

@@ -4,8 +4,14 @@ import { useChatStore } from './chat-store';
 vi.mock('@/agent/text-generation', async () => {
   const actual =
     await vi.importActual<typeof import('@/agent/text-generation')>('@/agent/text-generation');
-  return { ...actual, streamReply: vi.fn() };
+  return { ...actual, streamReply: vi.fn(), generateChatTitle: vi.fn() };
 });
+vi.mock('@/services/notifications', () => ({
+  notifications: {
+    error: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
 vi.mock('@/services/chat', () => ({
   ChatService: {
     CreateChat: vi.fn(async (title: string) => ({
@@ -32,8 +38,9 @@ vi.mock('../../bindings/changeme/internal/providers/service', () => ({
   APIKey: vi.fn(async () => 'test-key'),
 }));
 
-import { streamReply } from '@/agent/text-generation';
+import { generateChatTitle, streamReply } from '@/agent/text-generation';
 import { ChatService } from '@/services/chat';
+import { notifications } from '@/services/notifications';
 
 describe('chat-store streaming scheduler invariants', () => {
   const chatMessages = new Map<string, any[]>();
@@ -69,6 +76,7 @@ describe('chat-store streaming scheduler invariants', () => {
       chatMessages.set(chat.id, []);
       return chat;
     });
+    (generateChatTitle as any).mockResolvedValue('Generated title');
     useChatStore.setState({
       chats: [],
       messages: [],
@@ -225,5 +233,81 @@ describe('chat-store streaming scheduler invariants', () => {
 
     await useChatStore.getState().selectChat('chat-1');
     expect(useChatStore.getState().messages.some((m) => m.content === 'first-1first-2')).toBe(true);
+  });
+
+  it('generates title alongside first reply and skips later messages', async () => {
+    const chat = {
+      id: 'chat-1',
+      title: 'first prompt',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const backendChat = { ...chat };
+    useChatStore.setState({ chats: [chat], selectedChatId: chat.id, input: 'first prompt' });
+    (ChatService.ListChats as any).mockResolvedValue([backendChat]);
+    (ChatService.UpdateChatTitle as any).mockClear();
+
+    let resolveTitle!: (title: string) => void;
+    (generateChatTitle as any).mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveTitle = resolve;
+      }),
+    );
+    (streamReply as any).mockImplementation(async function* () {
+      yield { type: 'text', text: 'reply' };
+    });
+
+    const firstSubmit = useChatStore.getState().submitMessage();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(streamReply).toHaveBeenCalled();
+    expect(generateChatTitle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'p1' }),
+      'gpt-4',
+      'test-key',
+      'first prompt',
+    );
+
+    resolveTitle('Generated title');
+    await firstSubmit;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ChatService.UpdateChatTitle).toHaveBeenCalledWith('chat-1', 'Generated title');
+    expect(useChatStore.getState().chats.find((item) => item.id === chat.id)?.title).toBe(
+      'Generated title',
+    );
+
+    (generateChatTitle as any).mockClear();
+    useChatStore.getState().setInput('second prompt');
+    await useChatStore.getState().submitMessage();
+    expect(generateChatTitle).not.toHaveBeenCalled();
+  });
+
+  it('alerts on title failure without interrupting the reply', async () => {
+    const chat = {
+      id: 'chat-1',
+      title: 'first prompt',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    useChatStore.setState({ chats: [chat], selectedChatId: chat.id, input: 'first prompt' });
+    (ChatService.ListChats as any).mockResolvedValue([chat]);
+    (ChatService.UpdateChatTitle as any).mockClear();
+    (notifications.warning as any).mockClear();
+    (generateChatTitle as any).mockRejectedValueOnce(
+      new Error('Rate limit exceeded: free-models-per-day'),
+    );
+    (streamReply as any).mockImplementation(async function* () {
+      yield { type: 'text', text: 'reply' };
+    });
+
+    await useChatStore.getState().submitMessage();
+
+    expect(notifications.warning).toHaveBeenCalledWith(
+      'Chat title unavailable',
+      'Free-model daily limit reached. Add credits or choose another model/provider.',
+    );
+    expect(useChatStore.getState().messages.some((message) => message.content === 'reply')).toBe(
+      true,
+    );
+    expect(ChatService.UpdateChatTitle).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,8 @@ import {
   saveProvider as saveProviderBackend,
   setProviderApiKey,
 } from '@/services/providers';
+import { getUserFacingError } from '@/lib/error-message';
+import { notifications } from '@/services/notifications';
 
 export interface UseProviderSyncOptions {
   settingsOpen: boolean;
@@ -35,21 +37,29 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
   // Initial provider sync from Go/backend
   useEffect(() => {
     let cancelled = false;
-    void listProviders().then((items) => {
-      if (cancelled) return;
-      if (!items?.length) return;
-      const stored = useSettingsStore.getState();
-      const storedDefault = stored.defaultModel;
-      const nextSelectedModel =
-        stored.selectedModel ??
-        (storedDefault && items.some((item) => item.id === storedDefault.providerId)
-          ? storedDefault
-          : undefined);
-      setSettings({ providers: items as TextProvider[], selectedModel: nextSelectedModel });
-      setEditingProviderId((current) =>
-        current && items.some((item) => item.id === current) ? current : items[0].id,
-      );
-    });
+    void listProviders()
+      .then((items) => {
+        if (cancelled) return;
+        if (!items?.length) return;
+        const stored = useSettingsStore.getState();
+        const storedDefault = stored.defaultModel;
+        const nextSelectedModel =
+          stored.selectedModel ??
+          (storedDefault && items.some((item) => item.id === storedDefault.providerId)
+            ? storedDefault
+            : undefined);
+        setSettings({ providers: items as TextProvider[], selectedModel: nextSelectedModel });
+        setEditingProviderId((current) =>
+          current && items.some((item) => item.id === current) ? current : items[0].id,
+        );
+      })
+      .catch((error) => {
+        if (!cancelled)
+          notifications.error(
+            'Unable to load providers',
+            getUserFacingError(error, 'Could not load providers.'),
+          );
+      });
     return () => {
       cancelled = true;
     };
@@ -59,9 +69,17 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
   useEffect(() => {
     if (!settingsOpen || !provider) return;
     let cancelled = false;
-    void hasProviderApiKey(provider.id).then((has) => {
-      if (!cancelled) setApiKeyConfigured(has);
-    });
+    void hasProviderApiKey(provider.id)
+      .then((has) => {
+        if (!cancelled) setApiKeyConfigured(has);
+      })
+      .catch((error) => {
+        if (!cancelled)
+          notifications.error(
+            'Unable to check API key',
+            getUserFacingError(error, 'Could not check API key status.'),
+          );
+      });
     return () => {
       cancelled = true;
     };
@@ -84,7 +102,12 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
     providerSaveQueue.current = providerSaveQueue.current
       .catch(() => undefined)
       .then(() => saveProviderBackend(payload as any))
-      .catch(() => undefined);
+      .catch((error) => {
+        notifications.error(
+          'Unable to save provider',
+          getUserFacingError(error, 'Could not save provider settings.'),
+        );
+      });
   }, []);
 
   // Backward-compatible alias — single ordered save path
@@ -111,12 +134,7 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
   const handleDeleteProvider = useCallback(
     (id: string) => {
       const target = providers.find((item) => item.id === id);
-      if (
-        !target ||
-        providers.length <= 1 ||
-        !window.confirm(`Remove ${target.name || 'this provider'}?`)
-      )
-        return;
+      if (!target || providers.length <= 1) return;
       void deleteProviderBackend(id)
         .then(() => {
           const remaining = providers.filter((item) => item.id !== id);
@@ -125,7 +143,12 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
             selectedModel: selectedModel?.providerId === id ? undefined : selectedModel,
           });
         })
-        .catch((error) => console.error('Unable to delete provider', error));
+        .catch((error) =>
+          notifications.error(
+            'Unable to delete provider',
+            getUserFacingError(error, 'Could not delete provider.'),
+          ),
+        );
     },
     [providers, setSettings],
   );
@@ -160,7 +183,12 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
         setApiKey('');
         setApiKeyConfigured(true);
       })
-      .catch((error) => console.error('Unable to save provider API key', error));
+      .catch((error) =>
+        notifications.error(
+          'Unable to save API key',
+          getUserFacingError(error, 'Could not save API key.'),
+        ),
+      );
   }, [apiKey, provider, providers, setSettings]);
 
   const onApiKeyRemove = useCallback(() => {
@@ -175,7 +203,12 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
         setApiKeyConfigured(false);
         setApiKey('');
       })
-      .catch((error) => console.error('Unable to remove provider API key', error));
+      .catch((error) =>
+        notifications.error(
+          'Unable to remove API key',
+          getUserFacingError(error, 'Could not remove API key.'),
+        ),
+      );
   }, [provider, providers, setSettings]);
 
   const createProvider = useCallback(
@@ -185,7 +218,12 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
       try {
         if (key) await setProviderApiKey(newProvider.id, key);
       } catch (error) {
-        await deleteProviderBackend(newProvider.id).catch(() => undefined);
+        await deleteProviderBackend(newProvider.id).catch((cleanupError) =>
+          notifications.warning(
+            'Provider cleanup incomplete',
+            getUserFacingError(cleanupError, 'Could not remove the partially added provider.'),
+          ),
+        );
         throw error;
       }
       setSettings({ providers: [...providers, payload] });

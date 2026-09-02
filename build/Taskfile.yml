@@ -18,11 +18,13 @@ tasks:
 
   install:frontend:deps:npm:
     dir: frontend
+    # npm creates node_modules/.package-lock.json. Tracking that file instead of
+    # the node_modules directory makes Task's up-to-date check much more reliable.
     sources:
       - package.json
       - package-lock.json
     generates:
-      - node_modules
+      - node_modules/.package-lock.json
     preconditions:
       - sh: npm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
@@ -73,7 +75,7 @@ tasks:
     label: build:frontend (DEV={{.DEV}} RUNNER={{.PACKAGE_MANAGER}})
     summary: Build the frontend project
     # darwin:build:universal runs its per-arch builds as parallel deps, each of
-    # which depends on this task. Without run:once the two executions race:
+    # which depends on this task. Without run: once the two executions race:
     # one regenerates frontend/bindings (-clean deletes it first) while the
     # other's bundler is reading it, failing intermittently with
     # 'Could not resolve "./bindings/<pkg>"' (#4637).
@@ -82,6 +84,9 @@ tasks:
     sources:
       - "**/*"
       - exclude: node_modules/**/*
+      # The generated bindings are outputs of generate:bindings, not frontend
+      # source inputs. Keeping them out avoids self-triggering rebuild churn.
+      - exclude: bindings/**/*
     generates:
       - dist/**/*
     deps:
@@ -171,22 +176,27 @@ tasks:
           sed -E -i'' 's/class=\"btn\"/class=\"p-btn p-prim-col\"/g' "$INDEX_HTML" || true
         fi
 
-
-
   generate:bindings:
     summary: Generates bindings for the frontend
     run: once
-    deps:
-      - task: go:mod:tidy
+
+    # IMPORTANT:
+    # Do NOT run `go mod tidy` here. Binding generation does not need to mutate
+    # go.mod/go.sum on every dev launch. Run `go mod tidy` manually after
+    # changing Go dependencies, or from a setup/maintenance task.
     sources:
+      # JS/TS outside frontend can be referenced by //wails:include.
       - "**/*.[jt]s"
       - exclude: frontend/**/*
-      - frontend/bindings/**/*  # Rerun when switching between dev/production mode causes changes in output
       - "**/*.go"
       - go.mod
       - go.sum
+
+    # Do not list frontend/bindings as a source as well as a generated output.
+    # That makes the task invalidate itself after regeneration.
     generates:
       - frontend/bindings/**/*
+
     cmds:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i
 

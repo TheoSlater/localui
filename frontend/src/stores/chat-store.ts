@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { ChatService, type Chat, type Message } from '@/services/chat';
 import { isCompleteHttpUrl, type SelectedModel, type TextProvider } from '@/config/settings';
-import { streamReply } from '@/agent/text-generation';
+import { generateChatTitle, streamReply } from '@/agent/text-generation';
 import { getProviderApiKey } from '@/services/providers';
 import { createStreamScheduler } from '@/lib/stream-scheduler';
+import { getUserFacingError } from '@/lib/error-message';
+import { notifications } from '@/services/notifications';
 
 export type ChatMessage = Omit<Message, 'role'> & {
   role: 'user' | 'assistant' | 'error';
@@ -32,6 +34,7 @@ type ChatState = {
   renameChat: (id: string, title: string) => Promise<void>;
   deleteChat: (id: string) => Promise<void>;
   deleteAllChats: () => Promise<void>;
+  regenerateMessage: (messageId: string) => Promise<void>;
   setInput: (input: string) => void;
   clearSubmitError: () => void;
   submitMessage: () => Promise<void>;
@@ -68,6 +71,12 @@ function toViewMessages(items: Message[] | null | undefined): ChatMessage[] {
     ...message,
     role: message.role as ChatMessage['role'],
   }));
+}
+
+function isDefaultChatTitle(title: string, firstUserMessage: string): boolean {
+  const trimmedTitle = title.trim();
+  const defaultPreview = firstUserMessage.trim().slice(0, 60);
+  return !trimmedTitle || trimmedTitle === 'New Chat' || trimmedTitle === defaultPreview;
 }
 
 export const useChatStore = create<ChatState>((set, get) => {
@@ -164,6 +173,24 @@ export const useChatStore = create<ChatState>((set, get) => {
         submitError: null,
       });
     },
+    regenerateMessage: async (messageId) => {
+      const chatId = get().selectedChatId;
+      if (!chatId || get().isLoading) return;
+      const messages = toViewMessages(await ChatService.ListMessages(chatId));
+      const assistantIndex = messages.findIndex((message) => message.id === messageId);
+      const userMessage = messages[assistantIndex - 1];
+      if (
+        assistantIndex < 1 ||
+        messages[assistantIndex]?.role !== 'assistant' ||
+        userMessage?.role !== 'user'
+      )
+        return;
+
+      await ChatService.DeleteMessage(messageId);
+      await ChatService.DeleteMessage(userMessage.id);
+      set({ input: userMessage.content });
+      await get().submitMessage();
+    },
     setInput: (input) =>
       set((state) => ({ input, submitError: state.submitError ? null : state.submitError })),
     clearSubmitError: () => set({ submitError: null }),
@@ -178,6 +205,10 @@ export const useChatStore = create<ChatState>((set, get) => {
       const initialChatId = get().selectedChatId;
       const initialSelection = selectionGeneration;
       const isSelectedTarget = () => get().selectedChatId === initialChatId;
+      const showSubmitError = (message: string) => {
+        if (isSelectedTarget()) set({ submitError: message });
+        notifications.error('Unable to send message', message);
+      };
 
       const selected = get().selectedModel;
       const provider =
@@ -185,7 +216,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       const modelId = selected?.modelId ?? provider?.model;
       const setupError = getProviderSetupError(provider, modelId);
       if (setupError) {
-        if (isSelectedTarget()) set({ submitError: setupError });
+        showSubmitError(setupError);
         return;
       }
 
@@ -195,13 +226,15 @@ export const useChatStore = create<ChatState>((set, get) => {
         try {
           apiKey = await getProviderApiKey(provider!.id);
         } catch {
-          if (isSelectedTarget())
-            set({ isLoading: false, submitError: 'Add an API key in Settings first.' });
+          const message = 'Add an API key in Settings first.';
+          if (isSelectedTarget()) set({ isLoading: false, submitError: message });
+          notifications.error('Unable to send message', message);
           return;
         }
         if (!apiKey.trim()) {
-          if (isSelectedTarget())
-            set({ isLoading: false, submitError: 'Add an API key in Settings first.' });
+          const message = 'Add an API key in Settings first.';
+          if (isSelectedTarget()) set({ isLoading: false, submitError: message });
+          notifications.error('Unable to send message', message);
           return;
         }
       } else {
@@ -214,12 +247,16 @@ export const useChatStore = create<ChatState>((set, get) => {
 
       let chatId: string | undefined = initialChatId;
       let replyId: string | undefined;
+      let titleBeforeGeneration = chatId
+        ? (get().chats.find((chat) => chat.id === chatId)?.title ?? '')
+        : undefined;
 
       let controller: AbortController | undefined;
       try {
         if (!chatId) {
           const chat = await ChatService.CreateChat(content.slice(0, 60));
           chatId = chat.id;
+          titleBeforeGeneration = chat.title;
           set((state) => ({
             chats: [chat, ...state.chats],
             ...(state.selectedChatId === undefined && selectionGeneration === initialSelection
@@ -229,6 +266,9 @@ export const useChatStore = create<ChatState>((set, get) => {
         }
         await ChatService.AddMessage(chatId, 'user', content, '');
         const savedUserMessages = await ChatService.ListMessages(chatId);
+        const firstUserMessage = savedUserMessages?.find((message) => message.role === 'user');
+        const isFirstUserMessage =
+          (savedUserMessages ?? []).filter((message) => message.role === 'user').length === 1;
         controller = new AbortController();
         replyId = `assistant-${chatId}-${Date.now()}`;
         if (!chatId) throw new Error('Missing chat');
@@ -254,6 +294,56 @@ export const useChatStore = create<ChatState>((set, get) => {
               }
             : {}),
         }));
+
+        const currentChatTitle =
+          get().chats.find((chat) => chat.id === targetChatId)?.title ??
+          titleBeforeGeneration ??
+          '';
+        if (
+          isFirstUserMessage &&
+          firstUserMessage?.content &&
+          isDefaultChatTitle(currentChatTitle, firstUserMessage.content)
+        ) {
+          async function generateAndSaveTitle() {
+            const title = await generateChatTitle(
+              provider!,
+              modelId!,
+              apiKey,
+              firstUserMessage!.content,
+            );
+            if (!title) {
+              notifications.warning(
+                'Chat title unavailable',
+                'Model returned an invalid title. The default title was kept.',
+              );
+              return;
+            }
+            const latestChats = (await ChatService.ListChats()) ?? [];
+            const latestChat = latestChats.find((chat) => chat.id === targetChatId);
+            if (
+              !latestChat ||
+              (titleBeforeGeneration && latestChat.title !== titleBeforeGeneration) ||
+              !isDefaultChatTitle(latestChat.title, firstUserMessage!.content)
+            )
+              return;
+            const currentChat = get().chats.find((chat) => chat.id === targetChatId);
+            if (!currentChat || !isDefaultChatTitle(currentChat.title, firstUserMessage!.content))
+              return;
+            await ChatService.UpdateChatTitle(targetChatId, title);
+            set((state) => ({
+              chats: state.chats.map((chat) =>
+                chat.id === targetChatId ? { ...chat, title } : chat,
+              ),
+            }));
+          }
+
+          void generateAndSaveTitle().catch((error) => {
+            notifications.warning(
+              'Chat title unavailable',
+              getUserFacingError(error, 'Could not generate a chat title.'),
+            );
+          });
+        }
 
         let reply = '';
         let reasoning = '';
@@ -327,9 +417,21 @@ export const useChatStore = create<ChatState>((set, get) => {
         set((state) => {
           const streamingMessages = { ...state.streamingMessages };
           delete streamingMessages[chatId!];
+          const refreshedChats = (chats ?? state.chats).map((chat) => {
+            const currentChat = state.chats.find((item) => item.id === chat.id);
+            if (
+              chat.id === chatId &&
+              currentChat &&
+              firstUserMessage?.content &&
+              !isDefaultChatTitle(currentChat.title, firstUserMessage.content)
+            ) {
+              return { ...chat, title: currentChat.title };
+            }
+            return chat;
+          });
           return {
             streamingMessages,
-            chats: chats ?? state.chats,
+            chats: refreshedChats,
             ...(state.selectedChatId === chatId ? { messages: savedViewMessages } : {}),
           };
         });
@@ -354,8 +456,9 @@ export const useChatStore = create<ChatState>((set, get) => {
           }
           return;
         }
-        const message = error instanceof Error ? error.message : 'Text generation failed.';
+        const message = getUserFacingError(error, 'Text generation failed.');
         console.error('Unable to generate chat reply', error);
+        notifications.error('Message failed', message);
         set((state) => {
           const streamingMessages = { ...state.streamingMessages };
           delete streamingMessages[chatId!];

@@ -23,7 +23,7 @@ function isLocalProvider(type: TextProvider['type'], baseUrl: string): boolean {
 async function fetchOllamaModels(baseUrl: string): Promise<string[]> {
   const url = baseUrl.replace(/\/+$/, '') + '/api/tags';
   const res = await fetch(url);
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`Model list request failed (${res.status})`);
   const data = await res.json();
   return (data.models ?? []).map((m: { name: string }) => m.name);
 }
@@ -34,7 +34,7 @@ async function fetchOpenAICompatibleModels(baseUrl: string, key: string): Promis
   const headers: Record<string, string> = {};
   if (key) headers['Authorization'] = 'Bearer ' + key;
   const res = await fetch(modelsUrl, { headers });
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`Model list request failed (${res.status})`);
   const data = await res.json();
   return (data.data ?? []).map((m: { id: string }) => m.id);
 }
@@ -60,7 +60,9 @@ async function fetchGoogleModels(): Promise<string[]> {
   ];
 }
 
-async function fetchModelsForProvider(provider: TextProvider): Promise<string[]> {
+type ProviderModelResult = { modelIds: string[]; error?: unknown };
+
+async function fetchModelsForProvider(provider: TextProvider): Promise<ProviderModelResult> {
   try {
     let key = '';
     if (provider.type !== 'Ollama') {
@@ -68,32 +70,37 @@ async function fetchModelsForProvider(provider: TextProvider): Promise<string[]>
     }
     switch (provider.type) {
       case 'Ollama':
-        return await fetchOllamaModels(provider.baseUrl ?? '');
+        return { modelIds: await fetchOllamaModels(provider.baseUrl ?? '') };
       case 'Anthropic':
-        return await fetchAnthropicModels();
+        return { modelIds: await fetchAnthropicModels() };
       case 'Google':
-        return await fetchGoogleModels();
+        return { modelIds: await fetchGoogleModels() };
       default:
-        return await fetchOpenAICompatibleModels(provider.baseUrl ?? '', key);
+        return { modelIds: await fetchOpenAICompatibleModels(provider.baseUrl ?? '', key) };
     }
-  } catch {
-    return [];
+  } catch (error) {
+    return { modelIds: [], error };
   }
 }
 
 export async function fetchAllModels(providers: TextProvider[]): Promise<ModelItem[]> {
   const results = await Promise.all(
     providers.map(async (provider) => {
-      const modelIds = await fetchModelsForProvider(provider);
+      const result = await fetchModelsForProvider(provider);
       const local = isLocalProvider(provider.type, provider.baseUrl ?? '');
-      return modelIds.map((id) => ({
-        id,
-        providerId: provider.id,
-        providerName: provider.name,
-        providerType: provider.type,
-        origin: local ? ('local' as const) : ('external' as const),
-      }));
+      return { ...result, provider, local };
     }),
   );
-  return results.flat();
+  if (results.length > 0 && results.every((result) => result.error !== undefined)) {
+    throw results[0].error;
+  }
+  return results.flatMap(({ modelIds, provider, local }) =>
+    modelIds.map((id) => ({
+      id,
+      providerId: provider.id,
+      providerName: provider.name,
+      providerType: provider.type,
+      origin: local ? ('local' as const) : ('external' as const),
+    })),
+  );
 }

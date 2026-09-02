@@ -65,6 +65,10 @@ function PromptInput({
     onClick?.(e);
   };
 
+  const focusTextarea = () => {
+    if (!disabled) textareaRef.current?.focus();
+  };
+
   return (
     <TooltipProvider>
       <PromptInputContext.Provider
@@ -79,6 +83,7 @@ function PromptInput({
         }}
       >
         <div
+          onPointerDownCapture={focusTextarea}
           onClick={handleClick}
           className={cn(
             'border-input bg-background cursor-text rounded-3xl border p-2 shadow-xs',
@@ -191,11 +196,16 @@ function PromptInputAction({
   side = 'top',
   ...props
 }: PromptInputActionProps) {
-  const { disabled } = usePromptInput();
+  const { disabled, textareaRef } = usePromptInput();
+
+  const handleActionClick = (event: React.MouseEvent) => {
+    if (!disabled) textareaRef.current?.focus();
+    event.stopPropagation();
+  };
 
   return (
     <Tooltip {...props}>
-      <TooltipTrigger disabled={disabled} onClick={(event) => event.stopPropagation()}>
+      <TooltipTrigger disabled={disabled} onClick={handleActionClick}>
         {children}
       </TooltipTrigger>
       <TooltipContent side={side} className={className}>
