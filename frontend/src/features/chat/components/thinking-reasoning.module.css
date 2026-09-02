@@ -21,11 +21,13 @@
   align-items: center;
   gap: 6px;
   align-self: flex-start;
-  min-height: 20px;
+  height: auto;
+  min-height: 20px !important;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: default;
+  outline: none;
 }
 .trHeader.isClickable {
   cursor: pointer;
@@ -81,17 +83,12 @@
 }
 .trViewport.isScroll {
   overflow-y: auto;
-  scrollbar-width: none;
-}
-.trViewport.isScroll::-webkit-scrollbar {
-  display: none;
+  scrollbar-width: thin;
 }
 .trStream {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
 }
 .trSentence {
   margin: 0;

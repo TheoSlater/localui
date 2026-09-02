@@ -88,7 +88,7 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="bg-background text-foreground grid h-[min(88vh,760px)] max-h-[calc(100vh-2rem)] w-[min(92vw,1160px)] max-w-[calc(100vw-1.5rem)] grid-rows-[4.25rem_minmax(0,1fr)] gap-0 overflow-hidden rounded-2xl border p-0 shadow-2xl"
+        className="bg-background text-foreground grid h-[min(88vh,760px)] max-h-[calc(100vh-2rem)] w-[min(92vw,1160px)] !max-w-none grid-rows-[4.25rem_minmax(0,1fr)] gap-0 overflow-hidden rounded-2xl border p-0 shadow-2xl"
       >
         <header className="flex items-center justify-between px-5 sm:px-8">
           <DialogTitle className="text-lg font-semibold tracking-tight">Settings</DialogTitle>

@@ -64,7 +64,7 @@ export function AddProviderWizard({ open, onClose, onComplete }: WizardProps) {
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="bg-background text-foreground w-full max-w-[560px] gap-0 overflow-hidden rounded-2xl border p-0 shadow-2xl"
+        className="bg-background text-foreground w-full max-w-[560px] gap-0 overflow-hidden rounded-2xl border p-0 shadow-2xl sm:!max-w-[560px]"
       >
         <DialogHeader className="flex-row items-start justify-between border-b px-6 py-5">
           <div>
