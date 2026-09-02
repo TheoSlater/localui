@@ -55,6 +55,40 @@ body {
   margin: 0;
 }
 
+.technical-content table {
+  width: 100%;
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  border-spacing: 0;
+  background: color-mix(in oklab, var(--card) 55%, transparent);
+  overflow: hidden;
+  text-align: left;
+}
+.technical-content th,
+.technical-content td {
+  min-width: 7rem;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.technical-content th {
+  background: color-mix(in oklab, var(--muted) 65%, transparent);
+  color: var(--foreground);
+  font-weight: 600;
+}
+.technical-content td {
+  color: var(--muted-foreground);
+}
+.technical-content tbody tr:last-child td {
+  border-bottom: 0;
+}
+.technical-content tbody tr:hover {
+  background: color-mix(in oklab, var(--muted) 35%, transparent);
+}
+
 @keyframes provider-wizard-step-in {
   from {
     opacity: 0;
