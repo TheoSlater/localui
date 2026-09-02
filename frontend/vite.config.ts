@@ -17,4 +17,9 @@ export default defineConfig({
     strictPort: true,
   },
   plugins: [react(), tailwindcss(), wails('./bindings')],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+  },
 });

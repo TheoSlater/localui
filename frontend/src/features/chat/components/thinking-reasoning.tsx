@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import styles from './ThinkingReasoning.module.css';
-import { ThinkingState } from './ThinkingState';
+import styles from './thinking-reasoning.module.css';
+import { ThinkingState } from './thinking-state';
 
 interface ThinkingReasoningProps {
   reasoning?: string;
@@ -23,10 +23,15 @@ export function ThinkingReasoning({ reasoning = '', streaming = false }: Thinkin
   const hasReasoning = reasoning.trim().length > 0;
 
   useEffect(() => {
+    if (streaming) startedAt.current = Date.now();
+  }, [streaming]);
+
+  useEffect(() => {
     if (!streaming) {
       setElapsed(Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)));
       return;
     }
+    setElapsed(1);
     const timer = window.setInterval(
       () => setElapsed(Math.max(1, Math.round((Date.now() - startedAt.current) / 1000))),
       1000,

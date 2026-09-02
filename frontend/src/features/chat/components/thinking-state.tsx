@@ -1,6 +1,6 @@
 'use client';
 
-import styles from './ThinkingState.module.css';
+import styles from './thinking-state.module.css';
 
 export function ThinkingState() {
   return <span className={styles.shimmer}>Thinking</span>;

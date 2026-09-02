@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { AppSidebar } from '@/components/shared/app-sidebar';
+import { AppSidebar } from './app-sidebar';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
-import { ModelSelector } from '@/components/shared/model-selector';
+import { ModelSelector } from '@/features/settings/components/model-selector';
 import type { TextProvider } from '@/config/settings';
 import type { Chat } from '@/services/chat';
 

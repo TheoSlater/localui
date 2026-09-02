@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src", "bindings", "src/**/*.test.ts", "src/**/*.test.tsx", "src/test"],
+  "compilerOptions": {
+    "noUnusedLocals": false
+  }
+}

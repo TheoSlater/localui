@@ -21,10 +21,6 @@ export function DeleteProviderAPIKey(id: string): $CancellablePromise<void> {
     return $Call.ByID(1328835776, id);
 }
 
-export function GenerateReply(id: string, prompt: string): $CancellablePromise<string> {
-    return $Call.ByID(1224156090, id, prompt);
-}
-
 export function HasProviderAPIKey(id: string): $CancellablePromise<boolean> {
     return $Call.ByID(1468476481, id);
 }

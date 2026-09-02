@@ -1,5 +1,5 @@
 import type { TextProvider } from '@/config/settings';
-import { APIKey } from '../../bindings/changeme/internal/providers/service';
+import { getProviderApiKey } from '@/services/providers';
 
 export interface ModelItem {
   id: string;
@@ -64,7 +64,7 @@ async function fetchModelsForProvider(provider: TextProvider): Promise<string[]>
   try {
     let key = '';
     if (provider.type !== 'Ollama') {
-      key = await APIKey(provider.id);
+      key = await getProviderApiKey(provider.id);
     }
     switch (provider.type) {
       case 'Ollama':

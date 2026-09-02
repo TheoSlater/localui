@@ -2,7 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { TextProvider } from '@/config/settings';
-import { isConfigured, providerLabel, ProviderList } from '@/components/shared/provider-list';
+import { isConfigured, providerLabel, ProviderList } from './provider-list';
 
 interface ProviderSettingsPanelProps {
   providers: TextProvider[];

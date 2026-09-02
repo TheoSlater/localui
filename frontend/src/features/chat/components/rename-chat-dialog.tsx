@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Chat } from '@/services/chat';
+import { useDialogTransition } from '@/hooks/use-dialog-transition';
 
 export function RenameChatDialog({
   chat,
@@ -14,23 +15,12 @@ export function RenameChatDialog({
   onSave: (title: string) => void;
 }) {
   const [title, setTitle] = useState(chat?.title ?? '');
-  const [visible, setVisible] = useState(Boolean(chat));
-  const [closing, setClosing] = useState(false);
+  const { visible, closing, requestClose } = useDialogTransition(undefined, chat);
   useEffect(() => {
-    if (chat) {
-      setTitle(chat.title);
-      setVisible(true);
-      setClosing(false);
-    }
+    if (chat) setTitle(chat.title);
   }, [chat]);
   if (!chat && !visible) return null;
-  const close = () => {
-    setClosing(true);
-    window.setTimeout(() => {
-      setVisible(false);
-      onClose();
-    }, 160);
-  };
+  const close = () => requestClose(onClose);
   const save = () => {
     if (title.trim()) {
       onSave(title);

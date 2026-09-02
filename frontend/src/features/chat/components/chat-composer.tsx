@@ -27,7 +27,7 @@ export function ChatComposer({
       value={value}
       onValueChange={onValueChange}
       onSubmit={onSubmit}
-      className="border-border/70 bg-background/70 w-full shadow-sm backdrop-blur-md"
+      className="border-border/70 bg-background w-full shadow-sm"
     >
       <PromptInputTextarea placeholder="Ask anything" className="bg-transparent" />
       <PromptInputActions className="justify-end pt-2">

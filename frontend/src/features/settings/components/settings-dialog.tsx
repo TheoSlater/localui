@@ -5,8 +5,9 @@ import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { TextProvider } from '@/config/settings';
-import { ProviderSettingsPanel } from '@/components/shared/provider-settings-panel';
-import { DataControlsPanel } from '@/components/shared/data-controls-panel';
+import { ProviderSettingsPanel } from './provider-settings-panel';
+import { DataControlsPanel } from './data-controls-panel';
+import { useDialogTransition } from '@/hooks/use-dialog-transition';
 
 const settingsSections = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
@@ -59,8 +60,7 @@ export function SettingsDialog({
   hasChats,
   onDeleteAllChats,
 }: SettingsDialogProps) {
-  const [visible, setVisible] = useState(open);
-  const [closing, setClosing] = useState(false);
+  const { visible, closing, requestClose } = useDialogTransition(open);
   const [section, setSection] = useState<SettingsSection>('providers');
   const [settingsSearch, setSettingsSearch] = useState('');
 
@@ -70,20 +70,10 @@ export function SettingsDialog({
   );
 
   useEffect(() => {
-    if (open) {
-      setVisible(true);
-      setClosing(false);
-      setSettingsSearch('');
-    }
+    if (open) setSettingsSearch('');
   }, [open]);
 
-  const close = () => {
-    setClosing(true);
-    window.setTimeout(() => {
-      setVisible(false);
-      onClose();
-    }, 160);
-  };
+  const close = () => requestClose(onClose);
 
   if (!visible) return null;
 

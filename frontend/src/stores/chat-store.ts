@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { ChatService, type Chat, type Message } from '@/services/chat';
 import { isCompleteHttpUrl, type TextProvider } from '@/config/settings';
 import { streamReply } from '@/agent/text-generation';
-import * as ProviderService from '../../bindings/changeme/internal/providers/service';
+import { getProviderApiKey } from '@/services/providers';
+import { createStreamScheduler } from '@/lib/stream-scheduler';
 
 export type ChatMessage = Omit<Message, 'role'> & {
   role: 'user' | 'assistant' | 'error';
@@ -44,7 +45,7 @@ function toViewMessages(items: Message[] | null | undefined): ChatMessage[] {
 
 async function getProviderKey(id: string): Promise<string> {
   try {
-    return await ProviderService.APIKey(id);
+    return await getProviderApiKey(id);
   } catch {
     throw new Error('Add an API key in Settings first.');
   }
@@ -70,12 +71,14 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
     selectChat: async (id) => {
       const generation = chatGeneration;
+      chatGeneration += 1;
       activeRequest.current?.controller.abort();
       const messages = toViewMessages(await ChatService.ListMessages(id));
-      if (generation !== chatGeneration) return;
+      if (generation + 1 !== chatGeneration) return;
       set({ selectedChatId: id, messages, input: '', isLoading: false });
     },
     startNewChat: () => {
+      chatGeneration += 1;
       activeRequest.current?.controller.abort();
       set({ selectedChatId: undefined, messages: [], input: '', isLoading: false });
     },
@@ -112,6 +115,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       let chatId: string | undefined = get().selectedChatId;
       let replyId: string | undefined;
 
+      let controller: AbortController | undefined;
       try {
         if (!chatId) {
           const chat = await ChatService.CreateChat(content.slice(0, 60));
@@ -133,8 +137,9 @@ export const useChatStore = create<ChatState>((set, get) => {
         if (!provider.model.trim()) throw new Error('Add a Model in Settings first.');
         const apiKey = await getProviderKey(provider.id);
         if (isStale()) return;
-        const controller = new AbortController();
+        controller = new AbortController();
         replyId = `assistant-${Date.now()}`;
+        if (!chatId) throw new Error('Missing chat');
         activeRequest.current = { controller, chatId, replyId };
         set((state) => ({
           messages: [
@@ -152,17 +157,60 @@ export const useChatStore = create<ChatState>((set, get) => {
 
         let reply = '';
         let reasoning = '';
-        for await (const chunk of streamReply(provider, apiKey, content, controller.signal)) {
+        let pendingReply = '';
+        let pendingReasoning = '';
+        let lastFlushedReply = '';
+        let lastFlushedReasoning = '';
+        const flushStreaming = (snapshotReply: string, snapshotReasoning: string) => {
           if (isStale()) return;
-          if (chunk.type === 'reasoning') reasoning += chunk.text;
-          if (chunk.type === 'text') reply += chunk.text;
-          set((state) => ({
-            messages: state.messages.map((message) =>
-              message.id === replyId
-                ? { ...message, content: reply, reasoning: reasoning || undefined }
-                : message,
-            ),
-          }));
+          set((state) => {
+            const lastIdx = state.messages.length - 1;
+            let targetIdx = lastIdx;
+            if (state.messages[lastIdx]?.id !== replyId) {
+              targetIdx = state.messages.findIndex((m) => m.id === replyId);
+              if (targetIdx === -1) return {};
+            }
+            if (
+              state.messages[targetIdx]?.content === snapshotReply &&
+              state.messages[targetIdx]?.reasoning === (snapshotReasoning || undefined)
+            )
+              return {};
+            const next = state.messages.slice();
+            next[targetIdx] = {
+              ...next[targetIdx],
+              content: snapshotReply,
+              reasoning: snapshotReasoning || undefined,
+            };
+            return { messages: next };
+          });
+        };
+        const scheduler = createStreamScheduler(() => {
+          if (isStale()) return;
+          if (pendingReply === lastFlushedReply && pendingReasoning === lastFlushedReasoning)
+            return;
+          lastFlushedReply = pendingReply;
+          lastFlushedReasoning = pendingReasoning;
+          flushStreaming(pendingReply, pendingReasoning);
+        }, 32);
+        try {
+          for await (const chunk of streamReply(provider, apiKey, content, controller.signal)) {
+            if (isStale()) return;
+            if (chunk.type === 'reasoning') {
+              reasoning += chunk.text;
+              pendingReasoning = reasoning;
+            }
+            if (chunk.type === 'text') {
+              reply += chunk.text;
+              pendingReply = reply;
+            }
+            scheduler.schedule();
+          }
+        } finally {
+          scheduler.dispose();
+        }
+        if (isStale()) return;
+        if (reply !== lastFlushedReply || reasoning !== lastFlushedReasoning) {
+          flushStreaming(reply, reasoning);
         }
         if (isStale()) return;
         if (reply || reasoning) await ChatService.AddMessage(chatId, 'assistant', reply, reasoning);
@@ -176,7 +224,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           chats: chats ?? [],
         });
       } catch (error) {
-        if (isStale() || activeRequest.current?.controller.signal.aborted) {
+        if (isStale() || controller?.signal.aborted) {
           set((state) => ({
             messages: state.messages.map((message) =>
               message.id === replyId ? { ...message, streaming: false } : message,

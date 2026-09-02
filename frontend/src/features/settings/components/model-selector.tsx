@@ -29,14 +29,28 @@ export function ModelSelector({ providers, activeModel, onSelect }: ModelSelecto
   const searchRef = useRef<HTMLInputElement>(null);
   const modelsScrollRef = useRef<HTMLDivElement>(null);
 
+  const providersKey = useMemo(
+    () => providers.map((p) => `${p.id}:${p.type}:${p.baseUrl}`).join('|'),
+    [providers],
+  );
+
   useEffect(() => {
     if (providers.length === 0) return;
-    setLoading(true);
-    fetchAllModels(providers).then((items) => {
-      setModels(items);
-      setLoading(false);
-    });
-  }, [providers]);
+    if (!open) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      fetchAllModels(providers).then((items) => {
+        if (cancelled) return;
+        setModels(items);
+        setLoading(false);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [providers, providersKey, open]);
 
   const filtered = useMemo(() => {
     let list = models;

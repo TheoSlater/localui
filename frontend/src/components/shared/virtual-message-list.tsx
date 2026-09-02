@@ -1,5 +1,5 @@
-import { useVirtualizer, useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useCallback, useEffect, useRef } from 'react';
 
 export interface ScrollSnapshot {
   scrollOffset: number;
@@ -10,7 +10,6 @@ interface VirtualMessageListProps<T> {
   items: T[];
   getItemKey: (item: T) => string | number;
   renderItem: (item: T) => React.ReactNode;
-  scrollMode?: 'element' | 'window';
   overscan?: number;
   snapshot?: ScrollSnapshot;
   onSnapshotChange?: (snapshot: ScrollSnapshot) => void;
@@ -20,50 +19,63 @@ export function VirtualMessageList<T>({
   items,
   getItemKey,
   renderItem,
-  scrollMode = 'element',
   overscan = 6,
   snapshot,
   onSnapshotChange,
 }: VirtualMessageListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const options = {
-    count: items.length,
-    getItemKey: (index) => getItemKey(items[index]),
-    estimateSize: () => 56,
-    overscan,
-    shouldAdjustScrollPositionOnItemSizeChange: true,
-  };
-  const elementVirtualizer = useVirtualizer({
-    ...options,
-    getScrollElement: () => scrollRef.current,
-  });
-  const windowVirtualizer = useWindowVirtualizer({
-    ...options,
-    getScrollElement: () => window,
-  });
-  const virtualizer = scrollMode === 'window' ? windowVirtualizer : elementVirtualizer;
 
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const getKey = useCallback(
+    (index: number) => {
+      const item = itemsRef.current[index];
+      return item !== undefined ? getItemKey(item) : index;
+    },
+    [getItemKey],
+  );
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    getItemKey: getKey,
+    estimateSize: () => 72,
+    overscan,
+    scrollMargin: 0,
+  });
+
+  const snapshotOffset = snapshot?.scrollOffset;
   useEffect(() => {
-    if (snapshot) virtualizer.scrollToOffset(snapshot.scrollOffset, { align: 'start' });
-  }, [snapshot, virtualizer]);
+    if (snapshotOffset !== undefined)
+      virtualizer.scrollToOffset(snapshotOffset, { align: 'start' });
+  }, [snapshotOffset, virtualizer]);
 
   useEffect(() => {
     if (!onSnapshotChange) return;
-    const updateSnapshot = () =>
-      onSnapshotChange({
-        scrollOffset: virtualizer.scrollOffset ?? 0,
-        anchorId: virtualizer.getVirtualItems()[0]?.key?.toString(),
+    let raf = 0;
+    let pending = false;
+    const updateSnapshot = () => {
+      if (pending) return;
+      pending = true;
+      raf = window.requestAnimationFrame(() => {
+        pending = false;
+        onSnapshotChange({
+          scrollOffset: virtualizer.scrollOffset ?? 0,
+          anchorId: virtualizer.getVirtualItems()[0]?.key?.toString(),
+        });
       });
-    const element = scrollMode === 'element' ? scrollRef.current : window;
+    };
+    const element = scrollRef.current;
     element?.addEventListener('scroll', updateSnapshot, { passive: true });
-    return () => element?.removeEventListener('scroll', updateSnapshot);
-  }, [onSnapshotChange, scrollMode, virtualizer]);
+    return () => {
+      element?.removeEventListener('scroll', updateSnapshot);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [onSnapshotChange, virtualizer]);
 
   return (
-    <div
-      ref={scrollRef}
-      className={scrollMode === 'element' ? 'h-full overflow-y-auto' : undefined}
-    >
+    <div ref={scrollRef} className="h-full overflow-y-auto">
       <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((virtualItem) => (
           <div
