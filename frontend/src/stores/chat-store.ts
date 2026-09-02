@@ -264,7 +264,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             provider!,
             modelId!,
             apiKey,
-            content,
+            savedUserMessages ?? [],
             controller.signal,
           )) {
             if (isStale()) return;

@@ -1,15 +1,29 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { streamText } from 'ai';
+import type { ModelMessage } from 'ai';
 import type { TextProvider } from '@/config/settings';
+import type { Message } from '@/services/chat';
 import { SYSTEM_INSTRUCTIONS } from './system-instructions';
 
 export type ReplyStreamEvent = { type: 'text'; text: string } | { type: 'reasoning'; text: string };
+
+export type ChatHistoryMessage = Pick<Message, 'role' | 'content'>;
+
+export function toModelMessages(
+  messages: readonly ChatHistoryMessage[] | null | undefined,
+): ModelMessage[] {
+  return (messages ?? []).flatMap((message) => {
+    const role = message.role;
+    if ((role !== 'user' && role !== 'assistant') || !message.content.trim()) return [];
+    return [{ role, content: message.content }];
+  });
+}
 
 export function streamReply(
   provider: TextProvider,
   modelId: string,
   apiKey: string,
-  prompt: string,
+  history: readonly ChatHistoryMessage[],
   signal: AbortSignal,
 ) {
   if (provider.type !== 'Ollama' && !apiKey.trim())
@@ -25,7 +39,7 @@ export function streamReply(
   const result = streamText({
     model: client(modelId),
     instructions: SYSTEM_INSTRUCTIONS,
-    prompt,
+    messages: toModelMessages(history),
     reasoning: 'medium',
     abortSignal: signal,
   });
