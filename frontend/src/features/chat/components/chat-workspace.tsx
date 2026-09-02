@@ -94,7 +94,7 @@ export function ChatWorkspace({
 
   return (
     <div className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 px-4 pt-14 pb-64">
+      <div className="min-h-0 flex-1 px-4 pt-14">
         <VirtualMessageList
           items={messages}
           getItemKey={getItemKey}
@@ -102,6 +102,7 @@ export function ChatWorkspace({
           autoScroll={isLoading && atBottom}
           scrollToBottomRequest={scrollToBottomRequest}
           onAtBottomChange={setAtBottom}
+          bottomPadding={256}
         />
       </div>
       {!atBottom && (

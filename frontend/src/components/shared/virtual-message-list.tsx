@@ -16,6 +16,7 @@ interface VirtualMessageListProps<T> {
   autoScroll?: boolean;
   scrollToBottomRequest?: number;
   onAtBottomChange?: (atBottom: boolean) => void;
+  bottomPadding?: number;
 }
 
 export function VirtualMessageList<T>({
@@ -28,6 +29,7 @@ export function VirtualMessageList<T>({
   autoScroll = false,
   scrollToBottomRequest = 0,
   onAtBottomChange,
+  bottomPadding = 0,
 }: VirtualMessageListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -104,7 +106,10 @@ export function VirtualMessageList<T>({
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto">
-      <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+      <div
+        className="relative w-full"
+        style={{ height: virtualizer.getTotalSize() + bottomPadding }}
+      >
         {virtualizer.getVirtualItems().map((virtualItem) => (
           <div
             key={virtualItem.key}
