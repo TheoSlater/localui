@@ -1,6 +1,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useRef } from 'react';
 
+const AUTO_SCROLL_EASE = 0.22;
+const AUTO_SCROLL_EPSILON = 0.5;
+
 export interface ScrollSnapshot {
   scrollOffset: number;
   anchorId?: string | number;
@@ -32,6 +35,8 @@ export function VirtualMessageList<T>({
   bottomPadding = 0,
 }: VirtualMessageListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+  const autoScrollingRef = useRef(false);
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -55,16 +60,60 @@ export function VirtualMessageList<T>({
   const totalSize = virtualizer.getTotalSize();
   const lastItem = items[items.length - 1];
 
-  useEffect(() => {
-    if (!scrollToBottomRequest || !scrollRef.current) return;
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    onAtBottomChange?.(true);
-  }, [onAtBottomChange, scrollToBottomRequest]);
+  const cancelAutoScroll = useCallback(() => {
+    autoScrollingRef.current = false;
+    if (scrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    }
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+
+    const finish = () => {
+      element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+      autoScrollingRef.current = false;
+      scrollFrameRef.current = null;
+      onAtBottomChange?.(true);
+    };
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      finish();
+      return;
+    }
+
+    autoScrollingRef.current = true;
+    if (scrollFrameRef.current !== null) return;
+    const step = () => {
+      const current = scrollRef.current;
+      if (!current || !autoScrollingRef.current) {
+        scrollFrameRef.current = null;
+        return;
+      }
+      const target = Math.max(0, current.scrollHeight - current.clientHeight);
+      const distance = target - current.scrollTop;
+      if (Math.abs(distance) <= AUTO_SCROLL_EPSILON) {
+        finish();
+        return;
+      }
+      current.scrollTop += distance * AUTO_SCROLL_EASE;
+      scrollFrameRef.current = window.requestAnimationFrame(step);
+    };
+    scrollFrameRef.current = window.requestAnimationFrame(step);
+  }, [onAtBottomChange]);
 
   useEffect(() => {
-    if (!autoScroll || !scrollRef.current) return;
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [autoScroll, lastItem, totalSize]);
+    if (!scrollToBottomRequest || !scrollRef.current) return;
+    scrollToBottom();
+  }, [scrollToBottom, scrollToBottomRequest]);
+
+  useEffect(() => {
+    if (autoScroll) scrollToBottom();
+    else cancelAutoScroll();
+  }, [autoScroll, cancelAutoScroll, lastItem, scrollToBottom, totalSize]);
+
+  useEffect(() => cancelAutoScroll, [cancelAutoScroll]);
 
   useEffect(() => {
     if (!onAtBottomChange) return;
@@ -72,7 +121,7 @@ export function VirtualMessageList<T>({
     const update = () => {
       if (!element) return;
       const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
-      onAtBottomChange(atBottom);
+      onAtBottomChange(autoScrollingRef.current || atBottom);
     };
     element?.addEventListener('scroll', update, { passive: true });
     update();
@@ -80,6 +129,20 @@ export function VirtualMessageList<T>({
       element?.removeEventListener('scroll', update);
     };
   }, [onAtBottomChange]);
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const interrupt = () => cancelAutoScroll();
+    element.addEventListener('pointerdown', interrupt, { passive: true });
+    element.addEventListener('touchstart', interrupt, { passive: true });
+    element.addEventListener('wheel', interrupt, { passive: true });
+    return () => {
+      element.removeEventListener('pointerdown', interrupt);
+      element.removeEventListener('touchstart', interrupt);
+      element.removeEventListener('wheel', interrupt);
+    };
+  }, [cancelAutoScroll]);
 
   const snapshotOffset = snapshot?.scrollOffset;
   useEffect(() => {
