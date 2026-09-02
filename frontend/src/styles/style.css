@@ -70,6 +70,16 @@ body {
   animation: provider-wizard-step-in var(--motion-duration-quick) var(--motion-ease-spring);
 }
 
+.translucent-surface {
+  background-color: color-mix(in oklab, var(--background) 65%, transparent) !important;
+  backdrop-filter: blur(20px);
+}
+
+.reduce-transparency .translucent-surface {
+  background-color: var(--background) !important;
+  backdrop-filter: none;
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

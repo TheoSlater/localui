@@ -21,8 +21,10 @@ interface SettingsDialogProps {
   open: boolean;
   name: string;
   bubbleColor: string;
+  reduceTransparency: boolean;
   onNameChange: (name: string) => void;
   onBubbleColorChange: (color: string) => void;
+  onReduceTransparencyChange: (value: boolean) => void;
   onClose: () => void;
   providers: TextProvider[];
   activeProviderId: string;
@@ -43,8 +45,10 @@ export function SettingsDialog({
   open,
   name,
   bubbleColor,
+  reduceTransparency,
   onNameChange,
   onBubbleColorChange,
+  onReduceTransparencyChange,
   onClose,
   providers,
   activeProviderId,
@@ -143,8 +147,10 @@ export function SettingsDialog({
               <GeneralSettings
                 name={name}
                 bubbleColor={bubbleColor}
+                reduceTransparency={reduceTransparency}
                 onNameChange={onNameChange}
                 onBubbleColorChange={onBubbleColorChange}
+                onReduceTransparencyChange={onReduceTransparencyChange}
               />
             )}
           </main>
@@ -181,13 +187,17 @@ function SectionButton({
 function GeneralSettings({
   name,
   bubbleColor,
+  reduceTransparency,
   onNameChange,
   onBubbleColorChange,
+  onReduceTransparencyChange,
 }: {
   name: string;
   bubbleColor: string;
+  reduceTransparency: boolean;
   onNameChange: (name: string) => void;
   onBubbleColorChange: (color: string) => void;
+  onReduceTransparencyChange: (value: boolean) => void;
 }) {
   return (
     <div className="max-w-2xl">
@@ -217,6 +227,21 @@ function GeneralSettings({
                 value={bubbleColor}
                 onChange={(event) => onBubbleColorChange(event.target.value)}
                 className="h-9 w-12 cursor-pointer rounded-md border-0 bg-transparent p-0"
+              />
+            </label>
+            <label className="flex max-w-md items-center justify-between gap-6">
+              <span>
+                <span className="block text-sm font-medium">Reduce transparency</span>
+                <span className="text-muted-foreground mt-1 block text-xs">
+                  Use solid surfaces instead of translucent backgrounds.
+                </span>
+              </span>
+              <input
+                aria-label="Reduce transparency"
+                type="checkbox"
+                checked={reduceTransparency}
+                onChange={(event) => onReduceTransparencyChange(event.target.checked)}
+                className="size-4 shrink-0 accent-current"
               />
             </label>
           </div>

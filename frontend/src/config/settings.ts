@@ -4,6 +4,7 @@ export interface Settings {
   theme: Theme;
   name: string;
   userBubbleColor: string;
+  reduceTransparency: boolean;
   providers: TextProvider[];
   selectedModel?: SelectedModel;
   defaultModel?: SelectedModel;
@@ -36,6 +37,7 @@ export const defaultSettings: Settings = {
   theme: 'system',
   name: '',
   userBubbleColor: '#6d3bb8',
+  reduceTransparency: false,
   providers: [
     {
       id: 'openai',

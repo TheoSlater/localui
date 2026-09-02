@@ -13,11 +13,16 @@ function applyTheme(theme: Theme) {
 
 export function useTheme() {
   const theme = useSettingsStore((s) => s.theme);
+  const reduceTransparency = useSettingsStore((s) => s.reduceTransparency);
   const setSettings = useSettingsStore((s) => s.setSettings);
 
   React.useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  React.useEffect(() => {
+    document.documentElement.classList.toggle('reduce-transparency', reduceTransparency);
+  }, [reduceTransparency]);
 
   React.useEffect(() => {
     if (theme !== 'system') return;

@@ -45,7 +45,7 @@ export function ChatComposer({
       value={value}
       onValueChange={onValueChange}
       onSubmit={handleSubmit}
-      className="border-border/70 bg-background/65 w-full shadow-lg backdrop-blur-xl"
+      className="translucent-surface border-border/70 w-full shadow-lg"
     >
       {showBanner && (
         <button

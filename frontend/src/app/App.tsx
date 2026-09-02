@@ -27,6 +27,7 @@ function App() {
   }, [loadChats]);
   const name = useSettingsStore((s) => s.name);
   const bubbleColor = useSettingsStore((s) => s.userBubbleColor);
+  const reduceTransparency = useSettingsStore((s) => s.reduceTransparency);
   const selectedModel = useSettingsStore((s) => s.selectedModel);
   const setSettings = useSettingsStore((s) => s.setSettings);
   const {
@@ -76,8 +77,10 @@ function App() {
         open={settingsOpen}
         name={name}
         bubbleColor={bubbleColor}
+        reduceTransparency={reduceTransparency}
         onNameChange={(name) => setSettings({ name })}
         onBubbleColorChange={(userBubbleColor) => setSettings({ userBubbleColor })}
+        onReduceTransparencyChange={(reduceTransparency) => setSettings({ reduceTransparency })}
         providers={providers}
         activeProviderId={activeProviderId ?? ''}
         apiKey={apiKey}

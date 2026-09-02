@@ -114,7 +114,7 @@ export function ChatWorkspace({
               size="icon"
               aria-label="Scroll to bottom"
               onClick={() => setScrollToBottomRequest((value) => value + 1)}
-              className="border-border/70 bg-background/60 mx-auto rounded-full shadow-sm backdrop-blur-md"
+              className="translucent-surface border-border/70 mx-auto rounded-full shadow-sm"
             >
               <ArrowDown />
             </Button>
