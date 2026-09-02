@@ -68,13 +68,13 @@ async function fetchModelsForProvider(provider: TextProvider): Promise<string[]>
     }
     switch (provider.type) {
       case 'Ollama':
-        return await fetchOllamaModels(provider.baseUrl);
+        return await fetchOllamaModels(provider.baseUrl ?? '');
       case 'Anthropic':
         return await fetchAnthropicModels();
       case 'Google':
         return await fetchGoogleModels();
       default:
-        return await fetchOpenAICompatibleModels(provider.baseUrl, key);
+        return await fetchOpenAICompatibleModels(provider.baseUrl ?? '', key);
     }
   } catch {
     return [];
@@ -85,7 +85,7 @@ export async function fetchAllModels(providers: TextProvider[]): Promise<ModelIt
   const results = await Promise.all(
     providers.map(async (provider) => {
       const modelIds = await fetchModelsForProvider(provider);
-      const local = isLocalProvider(provider.type, provider.baseUrl);
+      const local = isLocalProvider(provider.type, provider.baseUrl ?? '');
       return modelIds.map((id) => ({
         id,
         providerId: provider.id,

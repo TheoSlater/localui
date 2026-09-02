@@ -6,12 +6,15 @@ export type ReplyStreamEvent = { type: 'text'; text: string } | { type: 'reasoni
 
 export function streamReply(
   provider: TextProvider,
+  modelId: string,
   apiKey: string,
   prompt: string,
   signal: AbortSignal,
 ) {
-  if (!apiKey.trim()) throw new Error('Add an API key in Settings first.');
-  if (!provider.model.trim()) throw new Error('Add a model name in Settings first.');
+  if (provider.type !== 'Ollama' && !apiKey.trim())
+    throw new Error('Add an API key in Settings first.');
+  if (!provider.baseUrl?.trim())
+    throw new Error('Add a complete http or https Base URL in Settings first.');
 
   const client = createOpenAICompatible({
     name: provider.id,
@@ -19,7 +22,7 @@ export function streamReply(
     apiKey,
   });
   const result = streamText({
-    model: client(provider.model),
+    model: client(modelId),
     prompt,
     reasoning: 'medium',
     abortSignal: signal,

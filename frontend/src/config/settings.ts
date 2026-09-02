@@ -5,16 +5,22 @@ export interface Settings {
   name: string;
   userBubbleColor: string;
   providers: TextProvider[];
-  activeProviderId: string;
+  selectedModel?: SelectedModel;
+  defaultModel?: SelectedModel;
 }
+
+export type ProviderType = 'OpenAI' | 'OpenAI-compatible' | 'Anthropic' | 'Google' | 'Ollama';
+export type SelectedModel = { providerId: string; modelId: string };
 
 export interface TextProvider {
   id: string;
-  type: 'OpenAI' | 'OpenAI-compatible' | 'Anthropic' | 'Google' | 'Ollama';
+  type: ProviderType;
   name: string;
-  baseUrl: string;
-  model: string;
+  baseUrl?: string;
+  /** Legacy backend field. Chat selection lives in Settings.selectedModel. */
+  model?: string;
   hasApiKey?: boolean;
+  configured?: boolean;
 }
 
 export function isCompleteHttpUrl(value: string): boolean {
@@ -39,5 +45,5 @@ export const defaultSettings: Settings = {
       model: '',
     },
   ],
-  activeProviderId: 'openai',
+  selectedModel: undefined,
 };

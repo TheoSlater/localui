@@ -1,4 +1,6 @@
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { ArrowDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { ChatComposer } from './chat-composer';
 import type { ChatMessage } from '@/stores/chat-store';
 import { VirtualMessageList } from '@/components/shared/virtual-message-list';
@@ -58,6 +60,9 @@ interface ChatWorkspaceProps {
   onStop: () => void;
   input: string;
   onValueChange: (value: string) => void;
+  canSend?: boolean;
+  submitError?: string | null;
+  onOpenSettings?: () => void;
 }
 
 export function ChatWorkspace({
@@ -68,8 +73,13 @@ export function ChatWorkspace({
   onStop,
   input,
   onValueChange,
+  canSend = true,
+  submitError = null,
+  onOpenSettings,
 }: ChatWorkspaceProps) {
   const userTextColor = useMemo(() => getBubbleTextColor(userBubbleColor), [userBubbleColor]);
+  const [atBottom, setAtBottom] = useState(true);
+  const [scrollToBottomRequest, setScrollToBottomRequest] = useState(0);
   const getItemKey = useCallback((m: ChatMessage) => m.id, []);
   const renderItem = useCallback(
     (message: ChatMessage) => (
@@ -85,9 +95,28 @@ export function ChatWorkspace({
   return (
     <div className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 px-4 pt-14 pb-44">
-        <VirtualMessageList items={messages} getItemKey={getItemKey} renderItem={renderItem} />
+        <VirtualMessageList
+          items={messages}
+          getItemKey={getItemKey}
+          renderItem={renderItem}
+          autoScroll={isLoading && atBottom}
+          scrollToBottomRequest={scrollToBottomRequest}
+          onAtBottomChange={setAtBottom}
+        />
       </div>
-      <div className="from-background via-background/90 pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t to-transparent px-4 pt-8 pb-6">
+      {!atBottom && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Scroll to bottom"
+          onClick={() => setScrollToBottomRequest((value) => value + 1)}
+          className="bg-background/90 absolute bottom-36 left-1/2 z-20 -translate-x-1/2 rounded-full shadow-sm backdrop-blur-sm"
+        >
+          <ArrowDown />
+        </Button>
+      )}
+      <div className="bg-background/45 pointer-events-none absolute inset-x-0 bottom-0 z-10 px-4 pt-8 pb-6 backdrop-blur-xl">
         <div className="pointer-events-auto mx-auto flex w-full max-w-2xl flex-col gap-3">
           <ChatComposer
             value={input}
@@ -95,6 +124,9 @@ export function ChatWorkspace({
             isLoading={isLoading}
             onSubmit={onSubmit}
             onStop={onStop}
+            canSend={canSend}
+            submitError={submitError}
+            onOpenSettings={onOpenSettings}
           />
         </div>
       </div>

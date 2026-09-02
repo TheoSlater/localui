@@ -2,7 +2,7 @@ import { AppLayout } from '@/app/layout/app-layout';
 import { ChatWorkspace } from '@/features/chat/components/chat-workspace';
 import { EmptyState } from '@/features/chat/components/empty-state';
 import { ChatComposer } from '@/features/chat/components/chat-composer';
-import { useChatStore } from '@/stores/chat-store';
+import { isProviderReady, useChatStore } from '@/stores/chat-store';
 import { useCallback, useEffect } from 'react';
 import { RenameChatDialog } from '@/features/chat/components/rename-chat-dialog';
 import type { Chat } from '@/services/chat';
@@ -27,11 +27,11 @@ function App() {
   }, [loadChats]);
   const name = useSettingsStore((s) => s.name);
   const bubbleColor = useSettingsStore((s) => s.userBubbleColor);
+  const selectedModel = useSettingsStore((s) => s.selectedModel);
   const setSettings = useSettingsStore((s) => s.setSettings);
   const {
     providers,
     activeProviderId,
-    provider,
     apiKey,
     apiKeyConfigured,
     setApiKey,
@@ -41,7 +41,7 @@ function App() {
     onActiveProviderChange,
     onApiKeySave,
     onApiKeyRemove,
-    onAddProvider,
+    createProvider,
   } = useProviderSync({ settingsOpen });
 
   const handleDeleteAllChats = useCallback(() => {
@@ -61,7 +61,7 @@ function App() {
   return (
     <AppLayout
       providers={providers}
-      activeModel={provider?.model ?? ''}
+      activeModel={selectedModel?.modelId ?? ''}
       onModelSelect={handleModelSelect}
       onNewChat={startNewChat}
       chats={chats}
@@ -71,7 +71,7 @@ function App() {
       onDeleteChat={onDeleteChat}
       onSettings={onSettings}
     >
-      <ChatViewport />
+      <ChatViewport onOpenSettings={onSettings} />
       <SettingsDialog
         open={settingsOpen}
         name={name}
@@ -79,7 +79,7 @@ function App() {
         onNameChange={(name) => setSettings({ name })}
         onBubbleColorChange={(userBubbleColor) => setSettings({ userBubbleColor })}
         providers={providers}
-        activeProviderId={activeProviderId}
+        activeProviderId={activeProviderId ?? ''}
         apiKey={apiKey}
         apiKeyConfigured={apiKeyConfigured}
         onProviderChange={onProviderChange}
@@ -87,8 +87,8 @@ function App() {
         onApiKeyChange={setApiKey}
         onApiKeySave={onApiKeySave}
         onApiKeyRemove={onApiKeyRemove}
-        onAddProvider={onAddProvider}
         onDeleteProvider={handleDeleteProvider}
+        onCreateProvider={createProvider}
         hasChats={chats.length > 0}
         onDeleteAllChats={handleDeleteAllChats}
         onClose={() => {
@@ -107,10 +107,13 @@ function App() {
   );
 }
 
-function ChatViewport() {
+function ChatViewport({ onOpenSettings }: { onOpenSettings: () => void }) {
   const messages = useChatStore((s) => s.messages);
   const input = useChatStore((s) => s.input);
   const isLoading = useChatStore((s) => s.isLoading);
+  const providers = useChatStore((s) => s.providers);
+  const selectedModel = useChatStore((s) => s.selectedModel);
+  const submitError = useChatStore((s) => s.submitError);
   const selectedChatId = useChatStore((s) => s.selectedChatId);
   const setInput = useChatStore((s) => s.setInput);
   const submitMessage = useChatStore((s) => s.submitMessage);
@@ -118,6 +121,8 @@ function ChatViewport() {
   const bubbleColor = useSettingsStore((s) => s.userBubbleColor);
   const name = useSettingsStore((s) => s.name);
   const handleSubmit = useCallback(() => void submitMessage(), [submitMessage]);
+  const provider = providers.find((item) => item.id === selectedModel?.providerId);
+  const canSend = isProviderReady(provider) && Boolean(selectedModel?.modelId);
 
   if (messages.length === 0) {
     return (
@@ -128,6 +133,9 @@ function ChatViewport() {
           isLoading={isLoading}
           onSubmit={handleSubmit}
           onStop={stopMessage}
+          canSend={canSend}
+          submitError={submitError}
+          onOpenSettings={onOpenSettings}
         />
       </EmptyState>
     );
@@ -142,6 +150,9 @@ function ChatViewport() {
       onStop={stopMessage}
       input={input}
       onValueChange={setInput}
+      canSend={canSend}
+      submitError={submitError}
+      onOpenSettings={onOpenSettings}
     />
   );
 }

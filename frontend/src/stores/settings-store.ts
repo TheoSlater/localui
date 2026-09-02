@@ -16,6 +16,22 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'settings',
+      version: 1,
+      migrate: (persisted: unknown) => {
+        const value = persisted as Partial<Settings> & { activeProviderId?: string };
+        const providers = value.providers ?? defaultSettings.providers;
+        const legacyProvider = providers.find((p) => p.id === value.activeProviderId);
+        return {
+          ...defaultSettings,
+          ...value,
+          providers,
+          selectedModel:
+            value.selectedModel ??
+            (legacyProvider?.model?.trim()
+              ? { providerId: legacyProvider.id, modelId: legacyProvider.model }
+              : undefined),
+        };
+      },
     },
   ),
 );

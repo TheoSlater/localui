@@ -1,4 +1,3 @@
-import { Check } from 'lucide-react';
 import type { TextProvider } from '@/config/settings';
 
 interface ProviderListProps {
@@ -13,7 +12,7 @@ export function providerLabel(provider: TextProvider): string {
 }
 
 export function isConfigured(provider: TextProvider, hasApiKey: boolean): boolean {
-  return Boolean(provider.baseUrl.trim() && provider.model.trim() && hasApiKey);
+  return Boolean(provider.baseUrl?.trim() && (provider.type === 'Ollama' || hasApiKey));
 }
 
 export function ProviderList({
@@ -49,7 +48,6 @@ export function ProviderList({
                   </span>
                   <span className="mt-1 block truncate text-xs">{provider.type}</span>
                 </span>
-                {selected && <Check className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />}
               </div>
             </button>
           );

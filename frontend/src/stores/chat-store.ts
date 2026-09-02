@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { ChatService, type Chat, type Message } from '@/services/chat';
-import { isCompleteHttpUrl, type TextProvider } from '@/config/settings';
+import { isCompleteHttpUrl, type SelectedModel, type TextProvider } from '@/config/settings';
 import { streamReply } from '@/agent/text-generation';
 import { getProviderApiKey } from '@/services/providers';
 import { createStreamScheduler } from '@/lib/stream-scheduler';
@@ -17,8 +17,13 @@ type ChatState = {
   messages: ChatMessage[];
   input: string;
   isLoading: boolean;
+  submitError: string | null;
+  providers: TextProvider[];
+  selectedModel?: SelectedModel;
+  /** Legacy test/install bridge; chat prefers selectedModel. */
   provider?: TextProvider;
   setProvider: (provider: TextProvider | undefined) => void;
+  setModelSelection: (providers: TextProvider[], selectedModel?: SelectedModel) => void;
   loadChats: () => Promise<void>;
   selectChat: (id: string) => Promise<void>;
   startNewChat: () => void;
@@ -26,9 +31,29 @@ type ChatState = {
   deleteChat: (id: string) => Promise<void>;
   deleteAllChats: () => Promise<void>;
   setInput: (input: string) => void;
+  clearSubmitError: () => void;
   submitMessage: () => Promise<void>;
   stopMessage: () => void;
 };
+
+export function getProviderSetupError(
+  provider: TextProvider | undefined,
+  modelId?: string,
+): string | null {
+  if (!provider) return 'Select a model to start chatting';
+  if (!isCompleteHttpUrl(provider.baseUrl ?? '')) {
+    return 'Add a complete http or https Base URL in Settings first.';
+  }
+  if (!(modelId ?? provider.model)?.trim()) return 'Select a model to start chatting';
+  if (provider.type !== 'Ollama' && provider.hasApiKey === false) {
+    return 'Add an API key in Settings first.';
+  }
+  return null;
+}
+
+export function isProviderReady(provider: TextProvider | undefined): boolean {
+  return getProviderSetupError(provider) === null;
+}
 
 type ActiveRequest = {
   controller: AbortController;
@@ -43,14 +68,6 @@ function toViewMessages(items: Message[] | null | undefined): ChatMessage[] {
   }));
 }
 
-async function getProviderKey(id: string): Promise<string> {
-  try {
-    return await getProviderApiKey(id);
-  } catch {
-    throw new Error('Add an API key in Settings first.');
-  }
-}
-
 export const useChatStore = create<ChatState>((set, get) => {
   const activeRequest: { current?: ActiveRequest } = {};
   let chatGeneration = 0;
@@ -61,7 +78,17 @@ export const useChatStore = create<ChatState>((set, get) => {
     messages: [],
     input: '',
     isLoading: false,
-    setProvider: (provider) => set({ provider }),
+    submitError: null,
+    providers: [],
+    selectedModel: undefined,
+    provider: undefined,
+    setProvider: (provider) =>
+      set((state) => ({
+        provider,
+        submitError: isProviderReady(provider) && state.submitError ? null : state.submitError,
+      })),
+    setModelSelection: (providers, selectedModel) =>
+      set({ providers, selectedModel, submitError: null }),
     loadChats: async () => {
       const generation = chatGeneration;
       const chats = (await ChatService.ListChats()) ?? [];
@@ -75,12 +102,18 @@ export const useChatStore = create<ChatState>((set, get) => {
       activeRequest.current?.controller.abort();
       const messages = toViewMessages(await ChatService.ListMessages(id));
       if (generation + 1 !== chatGeneration) return;
-      set({ selectedChatId: id, messages, input: '', isLoading: false });
+      set({ selectedChatId: id, messages, input: '', isLoading: false, submitError: null });
     },
     startNewChat: () => {
       chatGeneration += 1;
       activeRequest.current?.controller.abort();
-      set({ selectedChatId: undefined, messages: [], input: '', isLoading: false });
+      set({
+        selectedChatId: undefined,
+        messages: [],
+        input: '',
+        isLoading: false,
+        submitError: null,
+      });
     },
     renameChat: async (id, title) => {
       const next = title.trim();
@@ -101,9 +134,18 @@ export const useChatStore = create<ChatState>((set, get) => {
       chatGeneration += 1;
       activeRequest.current?.controller.abort();
       await ChatService.DeleteAllChats();
-      set({ chats: [], selectedChatId: undefined, messages: [], input: '', isLoading: false });
+      set({
+        chats: [],
+        selectedChatId: undefined,
+        messages: [],
+        input: '',
+        isLoading: false,
+        submitError: null,
+      });
     },
-    setInput: (input) => set({ input }),
+    setInput: (input) =>
+      set((state) => ({ input, submitError: state.submitError ? null : state.submitError })),
+    clearSubmitError: () => set({ submitError: null }),
     stopMessage: () => activeRequest.current?.controller.abort(),
     submitMessage: async () => {
       const { input } = get();
@@ -111,7 +153,39 @@ export const useChatStore = create<ChatState>((set, get) => {
       if (!content || get().isLoading) return;
       const generation = chatGeneration;
       const isStale = () => generation !== chatGeneration;
-      set({ isLoading: true });
+
+      const selected = get().selectedModel;
+      const provider =
+        get().providers.find((item) => item.id === selected?.providerId) ?? get().provider;
+      const modelId = selected?.modelId ?? provider?.model;
+      const setupError = getProviderSetupError(provider, modelId);
+      if (setupError) {
+        if (!isStale()) set({ submitError: setupError });
+        return;
+      }
+
+      let apiKey = '';
+      if (provider!.type !== 'Ollama') {
+        try {
+          apiKey = await getProviderApiKey(provider!.id);
+        } catch {
+          if (!isStale()) set({ submitError: 'Add an API key in Settings first.' });
+          return;
+        }
+        if (!apiKey.trim()) {
+          if (!isStale()) set({ submitError: 'Add an API key in Settings first.' });
+          return;
+        }
+      } else {
+        try {
+          apiKey = await getProviderApiKey(provider!.id);
+        } catch {
+          apiKey = '';
+        }
+      }
+      if (isStale()) return;
+
+      set({ isLoading: true, submitError: null });
       let chatId: string | undefined = get().selectedChatId;
       let replyId: string | undefined;
 
@@ -129,13 +203,6 @@ export const useChatStore = create<ChatState>((set, get) => {
         if (isStale()) return;
         set({ messages: toViewMessages(savedUserMessages), input: '' });
 
-        const provider = get().provider;
-        if (!provider) throw new Error('Select a provider in Settings first.');
-        if (!isCompleteHttpUrl(provider.baseUrl)) {
-          throw new Error('Add a complete http or https Base URL in Settings first.');
-        }
-        if (!provider.model.trim()) throw new Error('Add a Model in Settings first.');
-        const apiKey = await getProviderKey(provider.id);
         if (isStale()) return;
         controller = new AbortController();
         replyId = `assistant-${Date.now()}`;
@@ -193,7 +260,13 @@ export const useChatStore = create<ChatState>((set, get) => {
           flushStreaming(pendingReply, pendingReasoning);
         }, 32);
         try {
-          for await (const chunk of streamReply(provider, apiKey, content, controller.signal)) {
+          for await (const chunk of streamReply(
+            provider!,
+            modelId!,
+            apiKey,
+            content,
+            controller.signal,
+          )) {
             if (isStale()) return;
             if (chunk.type === 'reasoning') {
               reasoning += chunk.text;
@@ -234,26 +307,15 @@ export const useChatStore = create<ChatState>((set, get) => {
         }
         const message = error instanceof Error ? error.message : 'Text generation failed.';
         console.error('Unable to generate chat reply', error);
-        const errorItem: ChatMessage = {
-          id: `error-${Date.now()}`,
-          chatId: chatId ?? '',
-          role: 'error',
-          content: message,
-          createdAt: Date.now(),
-        };
-        set((state) => ({
-          messages: replyId
-            ? state.messages.map((item) =>
-                item.id === replyId ? { ...item, ...errorItem, streaming: false } : item,
-              )
-            : [...state.messages, errorItem],
-        }));
-        if (chatId) {
-          try {
-            await ChatService.AddMessage(chatId, 'error', message, '');
-          } catch (persistError) {
-            console.error('Unable to persist chat error', persistError);
-          }
+        if (!isStale()) {
+          set((state) => ({
+            messages: replyId
+              ? state.messages.map((item) =>
+                  item.id === replyId ? { ...item, streaming: false } : item,
+                )
+              : state.messages,
+            submitError: message,
+          }));
         }
       } finally {
         if (activeRequest.current?.replyId === replyId) activeRequest.current = undefined;

@@ -33,8 +33,8 @@ interface SettingsDialogProps {
   onApiKeyChange: (key: string) => void;
   onApiKeySave: () => void;
   onApiKeyRemove: () => void;
-  onAddProvider: () => void;
   onDeleteProvider: (id: string) => void;
+  onCreateProvider: (provider: TextProvider, key: string) => Promise<void>;
   hasChats: boolean;
   onDeleteAllChats: () => void;
 }
@@ -55,8 +55,8 @@ export function SettingsDialog({
   onApiKeyChange,
   onApiKeySave,
   onApiKeyRemove,
-  onAddProvider,
   onDeleteProvider,
+  onCreateProvider,
   hasChats,
   onDeleteAllChats,
 }: SettingsDialogProps) {
@@ -134,8 +134,8 @@ export function SettingsDialog({
                 onApiKeyChange={onApiKeyChange}
                 onApiKeySave={onApiKeySave}
                 onApiKeyRemove={onApiKeyRemove}
-                onAddProvider={onAddProvider}
                 onDeleteProvider={onDeleteProvider}
+                onCreateProvider={onCreateProvider}
               />
             ) : section === 'data-controls' ? (
               <DataControlsPanel hasChats={hasChats} onDeleteAllChats={onDeleteAllChats} />

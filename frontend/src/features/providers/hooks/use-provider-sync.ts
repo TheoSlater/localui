@@ -17,17 +17,19 @@ export interface UseProviderSyncOptions {
 
 export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
   const providers = useSettingsStore((s) => s.providers);
-  const activeProviderId = useSettingsStore((s) => s.activeProviderId);
+  const selectedModel = useSettingsStore((s) => s.selectedModel);
   const setSettings = useSettingsStore((s) => s.setSettings);
+  const setModelSelection = useChatStore((s) => s.setModelSelection);
   const setProvider = useChatStore((s) => s.setProvider);
+  const [editingProviderId, setEditingProviderId] = useState<string>();
 
   const [apiKey, setApiKey] = useState('');
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const providerSaveQueue = useRef(Promise.resolve());
 
   const provider = useMemo(
-    () => providers.find((item) => item.id === activeProviderId),
-    [providers, activeProviderId],
+    () => providers.find((item) => item.id === editingProviderId) ?? providers[0],
+    [providers, editingProviderId],
   );
 
   // Initial provider sync from Go/backend
@@ -36,16 +38,22 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
     void listProviders().then((items) => {
       if (cancelled) return;
       if (!items?.length) return;
-      const selectedId = items.some((item) => item.id === activeProviderId)
-        ? activeProviderId
-        : items[0].id;
-      setSettings({ providers: items as TextProvider[], activeProviderId: selectedId });
-      setApiKeyConfigured(Boolean(items.find((item) => item.id === selectedId)?.hasApiKey));
+      const stored = useSettingsStore.getState();
+      const storedDefault = stored.defaultModel;
+      const nextSelectedModel =
+        stored.selectedModel ??
+        (storedDefault && items.some((item) => item.id === storedDefault.providerId)
+          ? storedDefault
+          : undefined);
+      setSettings({ providers: items as TextProvider[], selectedModel: nextSelectedModel });
+      setEditingProviderId((current) =>
+        current && items.some((item) => item.id === current) ? current : items[0].id,
+      );
     });
     return () => {
       cancelled = true;
     };
-  }, [activeProviderId, setSettings]);
+  }, [setSettings]);
 
   // API-key status sync when settings opens or provider changes
   useEffect(() => {
@@ -64,10 +72,11 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
     setApiKey('');
   }, [provider?.id]);
 
-  // Keep chat store in sync with active provider
+  // Chat resolves provider from selected model.
   useEffect(() => {
-    setProvider(provider);
-  }, [provider, setProvider]);
+    if (setModelSelection) setModelSelection(providers, selectedModel);
+    else setProvider(providers.find((p) => p.id === selectedModel?.providerId));
+  }, [providers, selectedModel, setModelSelection, setProvider]);
 
   const enqueueProviderSave = useCallback((value: TextProvider) => {
     // Snapshot value at enqueue time to avoid stale reference if caller mutates
@@ -91,7 +100,7 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
         hasApiKey: target.hasApiKey ?? false,
       } as TextProvider;
       setSettings({
-        activeProviderId: providerId,
+        selectedModel: { providerId, modelId },
         providers: providers.map((p) => (p.id === providerId ? nextProvider : p)),
       });
       enqueueProviderSave(nextProvider);
@@ -111,7 +120,10 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
       void deleteProviderBackend(id)
         .then(() => {
           const remaining = providers.filter((item) => item.id !== id);
-          setSettings({ providers: remaining, activeProviderId: remaining[0]?.id ?? '' });
+          setSettings({
+            providers: remaining,
+            selectedModel: selectedModel?.providerId === id ? undefined : selectedModel,
+          });
         })
         .catch((error) => console.error('Unable to delete provider', error));
     },
@@ -130,7 +142,7 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
 
   const onActiveProviderChange = useCallback(
     (nextId: string) => {
-      setSettings({ activeProviderId: nextId });
+      setEditingProviderId(nextId);
       setApiKey('');
     },
     [setSettings],
@@ -166,21 +178,25 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
       .catch((error) => console.error('Unable to remove provider API key', error));
   }, [provider, providers, setSettings]);
 
-  const onAddProvider = useCallback(() => {
-    const newProvider: TextProvider = {
-      id: `provider-${Date.now()}`,
-      name: 'New provider',
-      type: 'OpenAI-compatible',
-      baseUrl: '',
-      model: '',
-    };
-    setSettings({ providers: [...providers, newProvider], activeProviderId: newProvider.id });
-    saveProvider(newProvider);
-  }, [providers, saveProvider, setSettings]);
+  const createProvider = useCallback(
+    async (newProvider: TextProvider, key: string) => {
+      const payload = { ...newProvider, hasApiKey: Boolean(key) };
+      await saveProviderBackend(payload as any);
+      try {
+        if (key) await setProviderApiKey(newProvider.id, key);
+      } catch (error) {
+        await deleteProviderBackend(newProvider.id).catch(() => undefined);
+        throw error;
+      }
+      setSettings({ providers: [...providers, payload] });
+      setEditingProviderId(newProvider.id);
+    },
+    [providers, setSettings],
+  );
 
   return {
     providers,
-    activeProviderId,
+    activeProviderId: editingProviderId,
     provider,
     apiKey,
     apiKeyConfigured,
@@ -192,7 +208,7 @@ export function useProviderSync({ settingsOpen }: UseProviderSyncOptions) {
     onActiveProviderChange,
     onApiKeySave,
     onApiKeyRemove,
-    onAddProvider,
+    createProvider,
     saveProvider,
   };
 }

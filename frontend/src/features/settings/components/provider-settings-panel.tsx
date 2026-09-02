@@ -1,6 +1,14 @@
 import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AddProviderWizard } from '@/features/providers/components/add-provider-wizard';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { TextProvider } from '@/config/settings';
 import { isConfigured, providerLabel, ProviderList } from './provider-list';
 
@@ -14,8 +22,8 @@ interface ProviderSettingsPanelProps {
   onApiKeyChange: (key: string) => void;
   onApiKeySave: () => void;
   onApiKeyRemove: () => void;
-  onAddProvider: () => void;
   onDeleteProvider: (id: string) => void;
+  onCreateProvider: (provider: TextProvider, key: string) => Promise<void>;
 }
 
 const providerTypes: TextProvider['type'][] = [
@@ -36,9 +44,10 @@ export function ProviderSettingsPanel({
   onApiKeyChange,
   onApiKeySave,
   onApiKeyRemove,
-  onAddProvider,
   onDeleteProvider,
+  onCreateProvider,
 }: ProviderSettingsPanelProps) {
+  const [wizardOpen, setWizardOpen] = useState(false);
   const activeProvider = providers.find((provider) => provider.id === activeProviderId);
 
   const updateActiveProvider = (changes: Partial<TextProvider>) => {
@@ -54,7 +63,7 @@ export function ProviderSettingsPanel({
             Configure models used for chat replies.
           </p>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={onAddProvider}>
+        <Button type="button" size="sm" variant="outline" onClick={() => setWizardOpen(true)}>
           <Plus />
           Add provider
         </Button>
@@ -90,17 +99,19 @@ export function ProviderSettingsPanel({
                 </label>
                 <label className="min-w-0 space-y-2">
                   <span className="text-sm font-medium">Provider type</span>
-                  <select
-                    value={activeProvider.type}
-                    onChange={(event) =>
-                      updateActiveProvider({ type: event.target.value as TextProvider['type'] })
-                    }
-                    className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border px-2.5 text-sm outline-none focus-visible:ring-3"
-                  >
-                    {providerTypes.map((type) => (
-                      <option key={type}>{type}</option>
-                    ))}
-                  </select>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="border-input bg-background hover:bg-muted flex h-9 w-full items-center justify-between rounded-md border px-2.5 text-sm">
+                      {activeProvider.type}
+                      <span>⌄</span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-[var(--anchor-width)]">
+                      {providerTypes.map((type) => (
+                        <DropdownMenuItem key={type} onClick={() => updateActiveProvider({ type })}>
+                          {type}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </label>
               </div>
 
@@ -110,16 +121,6 @@ export function ProviderSettingsPanel({
                   value={activeProvider.baseUrl}
                   onChange={(event) => updateActiveProvider({ baseUrl: event.target.value })}
                   placeholder="https://api.openai.com/v1"
-                  className="h-9 rounded-md"
-                />
-              </label>
-
-              <label className="block space-y-2">
-                <span className="text-sm font-medium">Model</span>
-                <Input
-                  value={activeProvider.model}
-                  onChange={(event) => updateActiveProvider({ model: event.target.value })}
-                  placeholder="Model name"
                   className="h-9 rounded-md"
                 />
               </label>
@@ -186,7 +187,7 @@ export function ProviderSettingsPanel({
             No providers yet.{' '}
             <button
               type="button"
-              onClick={onAddProvider}
+              onClick={() => setWizardOpen(true)}
               className="text-foreground underline-offset-4 hover:underline"
             >
               Add one
@@ -194,6 +195,11 @@ export function ProviderSettingsPanel({
           </div>
         )}
       </div>
+      <AddProviderWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onComplete={onCreateProvider}
+      />
     </div>
   );
 }

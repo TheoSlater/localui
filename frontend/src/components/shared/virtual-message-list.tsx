@@ -13,6 +13,9 @@ interface VirtualMessageListProps<T> {
   overscan?: number;
   snapshot?: ScrollSnapshot;
   onSnapshotChange?: (snapshot: ScrollSnapshot) => void;
+  autoScroll?: boolean;
+  scrollToBottomRequest?: number;
+  onAtBottomChange?: (atBottom: boolean) => void;
 }
 
 export function VirtualMessageList<T>({
@@ -22,6 +25,9 @@ export function VirtualMessageList<T>({
   overscan = 6,
   snapshot,
   onSnapshotChange,
+  autoScroll = false,
+  scrollToBottomRequest = 0,
+  onAtBottomChange,
 }: VirtualMessageListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -44,6 +50,28 @@ export function VirtualMessageList<T>({
     overscan,
     scrollMargin: 0,
   });
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    if (scrollToBottomRequest) element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+    else if (autoScroll) element.scrollTop = element.scrollHeight;
+  }, [autoScroll, items.length, scrollToBottomRequest]);
+
+  useEffect(() => {
+    if (!onAtBottomChange) return;
+    const element = scrollRef.current;
+    const update = () => {
+      if (!element) return;
+      const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+      onAtBottomChange(atBottom);
+    };
+    element?.addEventListener('scroll', update, { passive: true });
+    update();
+    return () => {
+      element?.removeEventListener('scroll', update);
+    };
+  }, [onAtBottomChange]);
 
   const snapshotOffset = snapshot?.scrollOffset;
   useEffect(() => {
