@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findStableCut, TAIL_CHARS } from './technical-content';
+import { findStableCut, shouldUsePlainTextStreaming, TAIL_CHARS } from './technical-content';
 
 describe('findStableCut invariants: stable+tail === original', () => {
   const check = (content: string) => {
@@ -155,5 +155,10 @@ describe('findStableCut invariants: stable+tail === original', () => {
     const cut = streaming ? findStableCut(md) : 0;
     expect(cut).toBe(0);
     expect(md.slice(0, cut) + md.slice(cut)).toBe(md);
+  });
+
+  it('does not parse an oversized stream with no safe cut', () => {
+    const content = '```\n' + 'const value = 1;\n'.repeat(500) + 'still streaming';
+    expect(shouldUsePlainTextStreaming(content, findStableCut(content))).toBe(true);
   });
 });

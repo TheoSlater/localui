@@ -15,6 +15,7 @@ import { streamingMarkdownExtension } from '@tanstack/markdown/extensions/stream
 export const LARGE_TEXT_THRESHOLD = 1800;
 export const MAX_ANIMATED_WORDS = 90;
 export const TAIL_CHARS = 900;
+export const STREAMING_PARSE_LIMIT = 6000;
 
 export function findStableCut(content: string): number {
   if (content.length < 1500) return 0;
@@ -35,6 +36,10 @@ export function findStableCut(content: string): number {
   return cut;
 }
 
+export function shouldUsePlainTextStreaming(content: string, cut: number): boolean {
+  return content.length > STREAMING_PARSE_LIMIT && cut === 0;
+}
+
 export const TechnicalContent = memo(function TechnicalContent({
   content,
   streaming = false,
@@ -53,7 +58,7 @@ export const TechnicalContent = memo(function TechnicalContent({
   const renderedContent = useMemo(() => {
     const rendered = renderMarkdownReact(document);
     if (!streaming) return rendered;
-    if (content.length > 6000) return rendered;
+    if (content.length > STREAMING_PARSE_LIMIT) return rendered;
     return renderStreamingNodes(rendered);
   }, [document, streaming, content.length]);
   return <div className="technical-content">{renderedContent}</div>;
@@ -66,7 +71,13 @@ export const StreamingMarkdown = memo(function StreamingMarkdown({
   content: string;
   streaming?: boolean;
 }) {
-  const cut = useMemo(() => (streaming ? findStableCut(content) : 0), [content, streaming]);
+  const cut = useMemo(() => {
+    if (!streaming || content.length > STREAMING_PARSE_LIMIT) return 0;
+    return findStableCut(content);
+  }, [content, streaming]);
+  if (streaming && shouldUsePlainTextStreaming(content, cut)) {
+    return <div className="technical-content whitespace-pre-wrap">{content}</div>;
+  }
   if (!streaming || cut === 0) {
     return <TechnicalContent content={content} streaming={streaming} />;
   }
