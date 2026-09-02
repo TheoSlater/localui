@@ -91,6 +91,10 @@ export function ChatWorkspace({
     ),
     [userBubbleColor, userTextColor],
   );
+  const handleSubmit = useCallback(() => {
+    setScrollToBottomRequest((value) => value + 1);
+    onSubmit();
+  }, [onSubmit]);
 
   return (
     <div className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden">
@@ -123,7 +127,7 @@ export function ChatWorkspace({
             value={input}
             onValueChange={onValueChange}
             isLoading={isLoading}
-            onSubmit={onSubmit}
+            onSubmit={handleSubmit}
             onStop={onStop}
             canSend={canSend}
             submitError={submitError}

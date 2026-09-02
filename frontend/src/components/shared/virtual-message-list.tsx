@@ -52,13 +52,23 @@ export function VirtualMessageList<T>({
     overscan,
     scrollMargin: 0,
   });
+  const totalSize = virtualizer.getTotalSize();
 
   useEffect(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-    if (scrollToBottomRequest) element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
-    else if (autoScroll) element.scrollTop = element.scrollHeight;
-  }, [autoScroll, items.length, scrollToBottomRequest]);
+    if (!scrollToBottomRequest || !scrollRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [scrollToBottomRequest]);
+
+  useEffect(() => {
+    if (!autoScroll || !scrollRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [autoScroll, items.length, totalSize]);
 
   useEffect(() => {
     if (!onAtBottomChange) return;
@@ -106,10 +116,7 @@ export function VirtualMessageList<T>({
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto">
-      <div
-        className="relative w-full"
-        style={{ height: virtualizer.getTotalSize() + bottomPadding }}
-      >
+      <div className="relative w-full" style={{ height: totalSize + bottomPadding }}>
         {virtualizer.getVirtualItems().map((virtualItem) => (
           <div
             key={virtualItem.key}
