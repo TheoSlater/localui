@@ -15,6 +15,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [renamingChat, setRenamingChat] = useState<Chat | undefined>();
   const chats = useChatStore((s) => s.chats);
+  const generatingChatIds = useChatStore((s) => s.generatingChatIds);
   const selectedChatId = useChatStore((s) => s.selectedChatId);
   const loadChats = useChatStore((s) => s.loadChats);
   const selectChat = useChatStore((s) => s.selectChat);
@@ -66,6 +67,7 @@ function App() {
       onModelSelect={handleModelSelect}
       onNewChat={startNewChat}
       chats={chats}
+      generatingChatIds={generatingChatIds}
       selectedChatId={selectedChatId}
       onSelectChat={onSelectChat}
       onRenameChat={setRenamingChat}

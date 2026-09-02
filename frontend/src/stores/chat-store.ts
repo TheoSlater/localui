@@ -15,6 +15,8 @@ type ChatState = {
   chats: Chat[];
   selectedChatId?: string;
   messages: ChatMessage[];
+  streamingMessages: Record<string, ChatMessage>;
+  generatingChatIds: string[];
   input: string;
   isLoading: boolean;
   submitError: string | null;
@@ -69,13 +71,15 @@ function toViewMessages(items: Message[] | null | undefined): ChatMessage[] {
 }
 
 export const useChatStore = create<ChatState>((set, get) => {
-  const activeRequest: { current?: ActiveRequest } = {};
-  let chatGeneration = 0;
+  const activeRequests = new Map<string, ActiveRequest>();
+  let selectionGeneration = 0;
 
   return {
     chats: [],
     selectedChatId: undefined,
     messages: [],
+    streamingMessages: {},
+    generatingChatIds: [],
     input: '',
     isLoading: false,
     submitError: null,
@@ -90,23 +94,28 @@ export const useChatStore = create<ChatState>((set, get) => {
     setModelSelection: (providers, selectedModel) =>
       set({ providers, selectedModel, submitError: null }),
     loadChats: async () => {
-      const generation = chatGeneration;
+      const generation = selectionGeneration;
       const chats = (await ChatService.ListChats()) ?? [];
-      if (generation !== chatGeneration) return;
-      set({ chats, selectedChatId: chats[0]?.id });
+      if (generation !== selectionGeneration) return;
+      set({ chats });
       if (chats[0]) await get().selectChat(chats[0].id);
+      else set({ selectedChatId: undefined, messages: [], isLoading: false });
     },
     selectChat: async (id) => {
-      const generation = chatGeneration;
-      chatGeneration += 1;
-      activeRequest.current?.controller.abort();
+      const generation = ++selectionGeneration;
       const messages = toViewMessages(await ChatService.ListMessages(id));
-      if (generation + 1 !== chatGeneration) return;
-      set({ selectedChatId: id, messages, input: '', isLoading: false, submitError: null });
+      if (generation !== selectionGeneration) return;
+      const streaming = get().streamingMessages[id];
+      set({
+        selectedChatId: id,
+        messages: streaming ? [...messages, streaming] : messages,
+        input: '',
+        isLoading: activeRequests.has(id),
+        submitError: null,
+      });
     },
     startNewChat: () => {
-      chatGeneration += 1;
-      activeRequest.current?.controller.abort();
+      selectionGeneration += 1;
       set({
         selectedChatId: undefined,
         messages: [],
@@ -124,20 +133,32 @@ export const useChatStore = create<ChatState>((set, get) => {
       }));
     },
     deleteChat: async (id) => {
-      if (activeRequest.current?.chatId === id) activeRequest.current.controller.abort();
+      activeRequests.get(id)?.controller.abort();
       await ChatService.DeleteChat(id);
       const chats = (await ChatService.ListChats()) ?? [];
-      const selected = get().selectedChatId === id;
-      set({ chats, ...(selected ? { selectedChatId: undefined, messages: [] } : {}) });
+      set((state) => {
+        const streamingMessages = { ...state.streamingMessages };
+        delete streamingMessages[id];
+        const selected = state.selectedChatId === id;
+        return {
+          chats,
+          streamingMessages,
+          generatingChatIds: state.generatingChatIds.filter((chatId) => chatId !== id),
+          ...(selected ? { selectedChatId: undefined, messages: [], isLoading: false } : {}),
+        };
+      });
     },
     deleteAllChats: async () => {
-      chatGeneration += 1;
-      activeRequest.current?.controller.abort();
+      selectionGeneration += 1;
+      activeRequests.forEach(({ controller }) => controller.abort());
+      activeRequests.clear();
       await ChatService.DeleteAllChats();
       set({
         chats: [],
         selectedChatId: undefined,
         messages: [],
+        streamingMessages: {},
+        generatingChatIds: [],
         input: '',
         isLoading: false,
         submitError: null,
@@ -146,13 +167,17 @@ export const useChatStore = create<ChatState>((set, get) => {
     setInput: (input) =>
       set((state) => ({ input, submitError: state.submitError ? null : state.submitError })),
     clearSubmitError: () => set({ submitError: null }),
-    stopMessage: () => activeRequest.current?.controller.abort(),
+    stopMessage: () => {
+      const chatId = get().selectedChatId;
+      if (chatId) activeRequests.get(chatId)?.controller.abort();
+    },
     submitMessage: async () => {
       const { input } = get();
       const content = input.trim();
       if (!content || get().isLoading) return;
-      const generation = chatGeneration;
-      const isStale = () => generation !== chatGeneration;
+      const initialChatId = get().selectedChatId;
+      const initialSelection = selectionGeneration;
+      const isSelectedTarget = () => get().selectedChatId === initialChatId;
 
       const selected = get().selectedModel;
       const provider =
@@ -160,20 +185,23 @@ export const useChatStore = create<ChatState>((set, get) => {
       const modelId = selected?.modelId ?? provider?.model;
       const setupError = getProviderSetupError(provider, modelId);
       if (setupError) {
-        if (!isStale()) set({ submitError: setupError });
+        if (isSelectedTarget()) set({ submitError: setupError });
         return;
       }
 
+      set({ isLoading: true, submitError: null });
       let apiKey = '';
       if (provider!.type !== 'Ollama') {
         try {
           apiKey = await getProviderApiKey(provider!.id);
         } catch {
-          if (!isStale()) set({ submitError: 'Add an API key in Settings first.' });
+          if (isSelectedTarget())
+            set({ isLoading: false, submitError: 'Add an API key in Settings first.' });
           return;
         }
         if (!apiKey.trim()) {
-          if (!isStale()) set({ submitError: 'Add an API key in Settings first.' });
+          if (isSelectedTarget())
+            set({ isLoading: false, submitError: 'Add an API key in Settings first.' });
           return;
         }
       } else {
@@ -183,43 +211,48 @@ export const useChatStore = create<ChatState>((set, get) => {
           apiKey = '';
         }
       }
-      if (isStale()) return;
 
-      set({ isLoading: true, submitError: null });
-      let chatId: string | undefined = get().selectedChatId;
+      let chatId: string | undefined = initialChatId;
       let replyId: string | undefined;
 
       let controller: AbortController | undefined;
       try {
         if (!chatId) {
           const chat = await ChatService.CreateChat(content.slice(0, 60));
-          if (isStale()) return;
           chatId = chat.id;
-          set((state) => ({ chats: [chat, ...state.chats], selectedChatId: chatId }));
+          set((state) => ({
+            chats: [chat, ...state.chats],
+            ...(state.selectedChatId === undefined && selectionGeneration === initialSelection
+              ? { selectedChatId: chatId }
+              : {}),
+          }));
         }
         await ChatService.AddMessage(chatId, 'user', content, '');
-        if (isStale()) return;
         const savedUserMessages = await ChatService.ListMessages(chatId);
-        if (isStale()) return;
-        set({ messages: toViewMessages(savedUserMessages), input: '' });
-
-        if (isStale()) return;
         controller = new AbortController();
-        replyId = `assistant-${Date.now()}`;
+        replyId = `assistant-${chatId}-${Date.now()}`;
         if (!chatId) throw new Error('Missing chat');
-        activeRequest.current = { controller, chatId, replyId };
+        const targetChatId = chatId;
+        const streamingMessage: ChatMessage = {
+          id: replyId,
+          chatId: targetChatId,
+          role: 'assistant',
+          content: '',
+          createdAt: Date.now(),
+          streaming: true,
+        };
+        activeRequests.set(targetChatId, { controller, chatId: targetChatId, replyId });
         set((state) => ({
-          messages: [
-            ...state.messages,
-            {
-              id: replyId!,
-              chatId: chatId!,
-              role: 'assistant',
-              content: '',
-              createdAt: Date.now(),
-              streaming: true,
-            },
-          ],
+          streamingMessages: { ...state.streamingMessages, [targetChatId]: streamingMessage },
+          generatingChatIds: state.generatingChatIds.includes(targetChatId)
+            ? state.generatingChatIds
+            : [...state.generatingChatIds, targetChatId],
+          ...(state.selectedChatId === targetChatId
+            ? {
+                messages: [...toViewMessages(savedUserMessages), streamingMessage],
+                input: '',
+              }
+            : {}),
         }));
 
         let reply = '';
@@ -229,30 +262,32 @@ export const useChatStore = create<ChatState>((set, get) => {
         let lastFlushedReply = '';
         let lastFlushedReasoning = '';
         const flushStreaming = (snapshotReply: string, snapshotReasoning: string) => {
-          if (isStale()) return;
+          if (!activeRequests.get(chatId!) || activeRequests.get(chatId!)?.replyId !== replyId)
+            return;
           set((state) => {
-            const lastIdx = state.messages.length - 1;
-            let targetIdx = lastIdx;
-            if (state.messages[lastIdx]?.id !== replyId) {
-              targetIdx = state.messages.findIndex((m) => m.id === replyId);
-              if (targetIdx === -1) return {};
-            }
-            if (
-              state.messages[targetIdx]?.content === snapshotReply &&
-              state.messages[targetIdx]?.reasoning === (snapshotReasoning || undefined)
-            )
-              return {};
-            const next = state.messages.slice();
-            next[targetIdx] = {
-              ...next[targetIdx],
+            const current = state.streamingMessages[chatId!];
+            if (!current || current.id !== replyId) return {};
+            const nextMessage = {
+              ...current,
               content: snapshotReply,
               reasoning: snapshotReasoning || undefined,
             };
-            return { messages: next };
+            const nextMessages =
+              state.selectedChatId === chatId
+                ? state.messages.some((message) => message.id === replyId)
+                  ? state.messages.map((message) =>
+                      message.id === replyId ? nextMessage : message,
+                    )
+                  : [...state.messages, nextMessage]
+                : state.messages;
+            return {
+              streamingMessages: { ...state.streamingMessages, [chatId!]: nextMessage },
+              ...(state.selectedChatId === chatId ? { messages: nextMessages } : {}),
+            };
           });
         };
         const scheduler = createStreamScheduler(() => {
-          if (isStale()) return;
+          if (!activeRequests.has(chatId!)) return;
           if (pendingReply === lastFlushedReply && pendingReasoning === lastFlushedReasoning)
             return;
           lastFlushedReply = pendingReply;
@@ -267,7 +302,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             savedUserMessages ?? [],
             controller.signal,
           )) {
-            if (isStale()) return;
+            if (!activeRequests.has(chatId)) return;
             if (chunk.type === 'reasoning') {
               reasoning += chunk.text;
               pendingReasoning = reasoning;
@@ -281,45 +316,73 @@ export const useChatStore = create<ChatState>((set, get) => {
         } finally {
           scheduler.dispose();
         }
-        if (isStale()) return;
+        if (!activeRequests.has(chatId)) return;
         if (reply !== lastFlushedReply || reasoning !== lastFlushedReasoning) {
           flushStreaming(reply, reasoning);
         }
-        if (isStale()) return;
         if (reply || reasoning) await ChatService.AddMessage(chatId, 'assistant', reply, reasoning);
-        if (isStale()) return;
         const savedMessages = await ChatService.ListMessages(chatId);
         const chats = await ChatService.ListChats();
-        if (isStale()) return;
         const savedViewMessages = toViewMessages(savedMessages);
-        set({
-          messages: savedViewMessages,
-          chats: chats ?? [],
+        set((state) => {
+          const streamingMessages = { ...state.streamingMessages };
+          delete streamingMessages[chatId!];
+          return {
+            streamingMessages,
+            chats: chats ?? state.chats,
+            ...(state.selectedChatId === chatId ? { messages: savedViewMessages } : {}),
+          };
         });
       } catch (error) {
-        if (isStale() || controller?.signal.aborted) {
-          set((state) => ({
-            messages: state.messages.map((message) =>
-              message.id === replyId ? { ...message, streaming: false } : message,
-            ),
-          }));
+        const aborted = controller?.signal.aborted ?? false;
+        if (aborted || (replyId && (!chatId || !activeRequests.has(chatId)))) {
+          if (chatId && activeRequests.has(chatId)) {
+            set((state) => {
+              const streamingMessages = { ...state.streamingMessages };
+              delete streamingMessages[chatId!];
+              return {
+                streamingMessages,
+                ...(state.selectedChatId === chatId && replyId
+                  ? {
+                      messages: state.messages.map((item) =>
+                        item.id === replyId ? { ...item, streaming: false } : item,
+                      ),
+                    }
+                  : {}),
+              };
+            });
+          }
           return;
         }
         const message = error instanceof Error ? error.message : 'Text generation failed.';
         console.error('Unable to generate chat reply', error);
-        if (!isStale()) {
-          set((state) => ({
-            messages: replyId
-              ? state.messages.map((item) =>
-                  item.id === replyId ? { ...item, streaming: false } : item,
-                )
-              : state.messages,
-            submitError: message,
-          }));
-        }
+        set((state) => {
+          const streamingMessages = { ...state.streamingMessages };
+          delete streamingMessages[chatId!];
+          return {
+            streamingMessages,
+            ...(state.selectedChatId === chatId
+              ? {
+                  messages: replyId
+                    ? state.messages.map((item) =>
+                        item.id === replyId ? { ...item, streaming: false } : item,
+                      )
+                    : state.messages,
+                  submitError: message,
+                }
+              : {}),
+          };
+        });
       } finally {
-        if (activeRequest.current?.replyId === replyId) activeRequest.current = undefined;
-        if (generation === chatGeneration) set({ isLoading: false });
+        if (chatId && activeRequests.get(chatId)?.replyId === replyId) {
+          activeRequests.delete(chatId);
+          set((state) => ({
+            generatingChatIds: state.generatingChatIds.filter((id) => id !== chatId),
+            ...(state.selectedChatId === chatId ? { isLoading: false } : {}),
+          }));
+        } else if (isSelectedTarget()) {
+          set({ isLoading: false });
+        }
       }
     },
   };

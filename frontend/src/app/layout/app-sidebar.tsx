@@ -25,6 +25,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onNewChat?: () => void;
   onSettings?: () => void;
   chats?: Chat[];
+  generatingChatIds?: string[];
   selectedChatId?: string;
   onSelectChat?: (id: string) => void;
   onRenameChat?: (chat: Chat) => void;
@@ -35,6 +36,7 @@ export function AppSidebar({
   onNewChat,
   onSettings,
   chats = [],
+  generatingChatIds = [],
   selectedChatId,
   onSelectChat,
   onRenameChat,
@@ -66,9 +68,14 @@ export function AppSidebar({
               <SidebarMenuItem key={chat.id} className="group/chat">
                 <SidebarMenuButton
                   isActive={chat.id === selectedChatId}
+                  aria-busy={generatingChatIds.includes(chat.id)}
                   onClick={() => onSelectChat?.(chat.id)}
                 >
-                  <span className="truncate">{chat.title}</span>
+                  <span
+                    className={`truncate ${generatingChatIds.includes(chat.id) ? 'shimmer-text' : ''}`}
+                  >
+                    {chat.title}
+                  </span>
                 </SidebarMenuButton>
                 <DropdownMenu>
                   <DropdownMenuTrigger

@@ -13,6 +13,7 @@ interface AppLayoutProps {
   onNewChat?: () => void;
   onSettings?: () => void;
   chats?: Chat[];
+  generatingChatIds?: string[];
   selectedChatId?: string;
   onSelectChat?: (id: string) => void;
   onRenameChat?: (chat: Chat) => void;
@@ -27,6 +28,7 @@ export function AppLayout({
   onModelSelect,
   onSettings,
   chats,
+  generatingChatIds,
   selectedChatId,
   onSelectChat,
   onRenameChat,
@@ -38,6 +40,7 @@ export function AppLayout({
         onNewChat={onNewChat}
         onSettings={onSettings}
         chats={chats}
+        generatingChatIds={generatingChatIds}
         selectedChatId={selectedChatId}
         onSelectChat={onSelectChat}
         onRenameChat={onRenameChat}

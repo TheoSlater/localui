@@ -118,6 +118,7 @@ describe('chat-store streaming scheduler invariants', () => {
       _p: any,
       _k: any,
       _c: any,
+      _history: any,
       signal: AbortSignal,
     ) {
       yield { type: 'text', text: 'part1' };
@@ -155,6 +156,7 @@ describe('chat-store streaming scheduler invariants', () => {
       _p: any,
       _k: any,
       _c: any,
+      _history: any,
       signal: AbortSignal,
     ) {
       for (let i = 0; i < 5; i++) {
@@ -183,14 +185,16 @@ describe('chat-store streaming scheduler invariants', () => {
     expect(msgs.some((m) => m.content === 'newcontent')).toBe(true);
   });
 
-  it('switching chats cannot write into newly selected chat', async () => {
+  it('switching chats keeps both generations isolated and visible', async () => {
     (streamReply as any).mockImplementation(async function* (
       _p: any,
       _k: any,
       _c: any,
+      history: any[],
       signal: AbortSignal,
     ) {
-      yield { type: 'text', text: 'chunk1' };
+      const text = history[0]?.chatId === 'chat-1' ? 'first' : 'second';
+      yield { type: 'text', text: `${text}-1` };
       await new Promise<void>((resolve, reject) => {
         const t = setTimeout(resolve, 20);
         signal.addEventListener('abort', () => {
@@ -199,7 +203,7 @@ describe('chat-store streaming scheduler invariants', () => {
         });
       });
       if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-      yield { type: 'text', text: 'chunk2' };
+      yield { type: 'text', text: `${text}-2` };
     });
     useChatStore.setState({ selectedChatId: 'chat-1' as any, input: 'hi' });
     chatMessages.set('chat-1', []);
@@ -207,10 +211,19 @@ describe('chat-store streaming scheduler invariants', () => {
     const p = useChatStore.getState().submitMessage();
     await new Promise((r) => setTimeout(r, 5));
     await useChatStore.getState().selectChat('chat-2');
-    await new Promise((r) => setTimeout(r, 50));
-    await p.catch(() => {});
-    const msgs = useChatStore.getState().messages;
-    expect(msgs.every((m) => m.chatId === 'chat-2' || m.chatId === '')).toBeTruthy();
-    expect(msgs.some((m) => m.content.includes('chunk1'))).toBe(false);
+    useChatStore.setState({ input: 'second prompt' });
+    const p2 = useChatStore.getState().submitMessage();
+    await new Promise((r) => setTimeout(r, 8));
+    expect(useChatStore.getState().generatingChatIds).toEqual(
+      expect.arrayContaining(['chat-1', 'chat-2']),
+    );
+    await Promise.all([p, p2]);
+    expect(useChatStore.getState().generatingChatIds).toEqual([]);
+    expect(useChatStore.getState().messages.some((m) => m.content === 'second-1second-2')).toBe(
+      true,
+    );
+
+    await useChatStore.getState().selectChat('chat-1');
+    expect(useChatStore.getState().messages.some((m) => m.content === 'first-1first-2')).toBe(true);
   });
 });
