@@ -372,9 +372,17 @@ body {
 }
 
 * {
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: oklch(0.8 0 0 / 40%) transparent;
+}
+
+[data-sidebar='content'] {
+  scrollbar-gutter: auto;
+}
+
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'] {
+  scrollbar-gutter: auto;
 }
 
 .dark * {
@@ -405,6 +413,17 @@ body {
 
 .dark *::-webkit-scrollbar-thumb:hover {
   background-color: oklch(1 0 0 / 35%);
+}
+
+/* Keep the shared no-scrollbar utility authoritative over the global scrollbar theme. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @layer base {

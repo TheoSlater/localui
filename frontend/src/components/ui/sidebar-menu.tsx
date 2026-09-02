@@ -64,7 +64,7 @@ export function SidebarMenuItem({ className, ...props }: React.ComponentProps<'l
     <li
       data-slot="sidebar-menu-item"
       data-sidebar="menu-item"
-      className={cn('group/menu-item relative', className)}
+      className={cn('group/menu-item relative w-full', className)}
       {...props}
     />
   );

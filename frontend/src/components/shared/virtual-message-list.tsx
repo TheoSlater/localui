@@ -174,14 +174,14 @@ export function VirtualMessageList<T>({
   }, [onSnapshotChange, virtualizer]);
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto">
+    <div ref={scrollRef} className="no-scrollbar h-full scrollbar-gutter-auto overflow-y-auto">
       <div className="relative w-full" style={{ height: totalSize + bottomPadding }}>
         {virtualizer.getVirtualItems().map((virtualItem) => (
           <div
             key={virtualItem.key}
             data-index={virtualItem.index}
             ref={virtualizer.measureElement}
-            className="absolute top-0 left-0 w-full [content-visibility:auto]"
+            className="absolute top-0 left-0 w-full px-4 [content-visibility:auto]"
             style={{ transform: `translateY(${virtualItem.start}px)` }}
           >
             {renderItem(items[virtualItem.index])}

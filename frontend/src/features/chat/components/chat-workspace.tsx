@@ -193,7 +193,7 @@ export function ChatWorkspace({
 
   return (
     <div className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 px-4 pt-14">
+      <div className="min-h-0 flex-1 pt-14">
         <VirtualMessageList
           items={messages}
           getItemKey={getItemKey}

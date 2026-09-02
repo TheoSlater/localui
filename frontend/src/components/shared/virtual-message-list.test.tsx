@@ -48,6 +48,29 @@ describe('VirtualMessageList chat identity isolation', () => {
     expect(mounted).toBeLessThan(items.length);
   });
 
+  it('keeps the scrollport edge-to-edge while padding message rows', () => {
+    const { container } = render(
+      <div style={{ height: 300, width: 400 }}>
+        <VirtualMessageList
+          items={[{ id: 'id-0', v: 0 }]}
+          getItemKey={(it) => it.id}
+          renderItem={(it) => <div>{it.v}</div>}
+        />
+      </div>,
+    );
+
+    const scrollport = container.querySelector('.overflow-y-auto');
+    const row = container.querySelector('[data-index]');
+    expect(scrollport).toHaveClass(
+      'no-scrollbar',
+      'scrollbar-gutter-auto',
+      'h-full',
+      'overflow-y-auto',
+    );
+    expect(scrollport).not.toHaveClass('px-4');
+    expect(row).toHaveClass('px-4');
+  });
+
   it('remounts when chat key changes (isolates measurements)', () => {
     const itemsA = Array.from({ length: 50 }, (_, i) => ({ id: `a-${i}`, v: `A${i}` }));
     const itemsB = Array.from({ length: 50 }, (_, i) => ({ id: `b-${i}`, v: `B${i}` }));
