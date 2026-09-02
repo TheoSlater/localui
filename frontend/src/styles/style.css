@@ -207,11 +207,19 @@ body {
 
 .t-stream-w {
   opacity: 0;
-  transition: opacity var(--stream-fade) var(--stream-ease);
+  display: inline-block;
+  filter: blur(var(--stream-blur));
+  transform: translateY(1px);
+  transition:
+    opacity var(--stream-fade) var(--stream-ease),
+    filter var(--stream-fade) var(--stream-ease),
+    transform var(--stream-fade) var(--stream-ease);
 }
 
 .t-stream-w.is-in {
   opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
 }
 
 @media (prefers-reduced-motion: reduce) {
