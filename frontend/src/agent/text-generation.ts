@@ -1,6 +1,7 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { streamText } from 'ai';
 import type { TextProvider } from '@/config/settings';
+import { SYSTEM_INSTRUCTIONS } from './system-instructions';
 
 export type ReplyStreamEvent = { type: 'text'; text: string } | { type: 'reasoning'; text: string };
 
@@ -23,6 +24,7 @@ export function streamReply(
   });
   const result = streamText({
     model: client(modelId),
+    instructions: SYSTEM_INSTRUCTIONS,
     prompt,
     reasoning: 'medium',
     abortSignal: signal,
