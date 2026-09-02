@@ -94,7 +94,7 @@ export function ChatWorkspace({
 
   return (
     <div className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 px-4 pt-14 pb-44">
+      <div className="min-h-0 flex-1 px-4 pt-14 pb-64">
         <VirtualMessageList
           items={messages}
           getItemKey={getItemKey}
@@ -111,12 +111,12 @@ export function ChatWorkspace({
           size="icon"
           aria-label="Scroll to bottom"
           onClick={() => setScrollToBottomRequest((value) => value + 1)}
-          className="bg-background/90 absolute bottom-36 left-1/2 z-20 -translate-x-1/2 rounded-full shadow-sm backdrop-blur-sm"
+          className="border-border/70 bg-background/60 absolute bottom-40 left-1/2 z-20 -translate-x-1/2 rounded-full shadow-sm backdrop-blur-md"
         >
           <ArrowDown />
         </Button>
       )}
-      <div className="bg-background/45 pointer-events-none absolute inset-x-0 bottom-0 z-10 px-4 pt-8 pb-6 backdrop-blur-xl">
+      <div className="from-background/90 via-background/60 to-background/0 pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t px-4 pt-14 pb-6">
         <div className="pointer-events-auto mx-auto flex w-full max-w-2xl flex-col gap-3">
           <ChatComposer
             value={input}
