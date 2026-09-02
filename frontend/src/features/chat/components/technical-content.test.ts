@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { findStableCut, shouldUsePlainTextStreaming, TAIL_CHARS } from './technical-content';
+import {
+  findStableCut,
+  shouldDeferMarkdown,
+  shouldUsePlainTextStreaming,
+  TAIL_CHARS,
+} from './technical-content';
 
 describe('findStableCut invariants: stable+tail === original', () => {
   const check = (content: string) => {
@@ -160,5 +165,10 @@ describe('findStableCut invariants: stable+tail === original', () => {
   it('does not parse an oversized stream with no safe cut', () => {
     const content = '```\n' + 'const value = 1;\n'.repeat(500) + 'still streaming';
     expect(shouldUsePlainTextStreaming(content, findStableCut(content))).toBe(true);
+  });
+
+  it('defers oversized completed Markdown', () => {
+    expect(shouldDeferMarkdown('x'.repeat(6001), false)).toBe(true);
+    expect(shouldDeferMarkdown('x'.repeat(6001), true)).toBe(false);
   });
 });

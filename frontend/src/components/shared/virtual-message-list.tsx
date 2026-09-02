@@ -115,7 +115,7 @@ export function VirtualMessageList<T>({
             key={virtualItem.key}
             data-index={virtualItem.index}
             ref={virtualizer.measureElement}
-            className="absolute top-0 left-0 w-full"
+            className="absolute top-0 left-0 w-full [content-visibility:auto]"
             style={{ transform: `translateY(${virtualItem.start}px)` }}
           >
             {renderItem(items[virtualItem.index])}

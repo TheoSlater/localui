@@ -40,6 +40,10 @@ export function shouldUsePlainTextStreaming(content: string, cut: number): boole
   return content.length > STREAMING_PARSE_LIMIT && cut === 0;
 }
 
+export function shouldDeferMarkdown(content: string, streaming: boolean): boolean {
+  return !streaming && content.length > STREAMING_PARSE_LIMIT;
+}
+
 export const TechnicalContent = memo(function TechnicalContent({
   content,
   streaming = false,
@@ -47,6 +51,22 @@ export const TechnicalContent = memo(function TechnicalContent({
   content: string;
   streaming?: boolean;
 }) {
+  const defer = shouldDeferMarkdown(content, streaming);
+  const [preparedContent, setPreparedContent] = useState<string | undefined>(() =>
+    defer ? undefined : content,
+  );
+
+  useEffect(() => {
+    if (!defer) return;
+    setPreparedContent(undefined);
+    const timer = window.setTimeout(() => setPreparedContent(content), 50);
+    return () => window.clearTimeout(timer);
+  }, [content, defer]);
+
+  if (defer && preparedContent !== content) {
+    return <div className="technical-content whitespace-pre-wrap">{content}</div>;
+  }
+
   const document = useMemo(
     () =>
       parseMarkdown(
