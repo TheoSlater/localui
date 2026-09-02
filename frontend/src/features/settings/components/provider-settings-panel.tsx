@@ -1,6 +1,8 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { AddProviderWizard } from '@/features/providers/components/add-provider-wizard';
 import {
@@ -78,17 +80,21 @@ export function ProviderSettingsPanel({
         />
 
         {activeProvider ? (
-          <div className="border-border/50 mt-6 min-w-0 border-t pt-5">
+          <div className="mt-6 min-w-0 pt-5">
+            <Separator className="mb-5" />
             <div className="flex items-center gap-2">
               <h3 className="truncate text-sm font-semibold">{providerLabel(activeProvider)}</h3>
-              <span className="bg-muted/70 text-muted-foreground animate-in fade-in-0 zoom-in-[var(--motion-scale-tooltip)] inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] leading-4 duration-(--motion-duration-quick)">
+              <Badge
+                variant={isConfigured(activeProvider, apiKeyConfigured) ? 'secondary' : 'outline'}
+                className="animate-in fade-in-0 zoom-in-[var(--motion-scale-tooltip)] duration-(--motion-duration-quick)"
+              >
                 {isConfigured(activeProvider, apiKeyConfigured) ? 'Configured' : 'Needs setup'}
-              </span>
+              </Badge>
             </div>
 
-            <div className="mt-5 max-w-5xl space-y-5">
+            <div className="mt-5 flex max-w-5xl flex-col gap-5">
               <div className="grid gap-4 md:grid-cols-2">
-                <label className="min-w-0 space-y-2">
+                <label className="flex min-w-0 flex-col gap-2">
                   <span className="text-sm font-medium">Name</span>
                   <Input
                     value={activeProvider.name}
@@ -97,7 +103,7 @@ export function ProviderSettingsPanel({
                     className="h-9 rounded-md"
                   />
                 </label>
-                <label className="min-w-0 space-y-2">
+                <label className="flex min-w-0 flex-col gap-2">
                   <span className="text-sm font-medium">Provider type</span>
                   <DropdownMenu>
                     <DropdownMenuTrigger className="border-input bg-background hover:bg-muted flex h-9 w-full items-center justify-between rounded-md border px-2.5 text-sm">
@@ -115,7 +121,7 @@ export function ProviderSettingsPanel({
                 </label>
               </div>
 
-              <label className="block space-y-2">
+              <label className="flex flex-col gap-2">
                 <span className="text-sm font-medium">Base URL</span>
                 <Input
                   value={activeProvider.baseUrl}
@@ -125,8 +131,9 @@ export function ProviderSettingsPanel({
                 />
               </label>
 
-              <div className="border-t pt-5">
-                <label className="block space-y-2">
+              <div className="pt-5">
+                <Separator className="mb-5" />
+                <label className="flex flex-col gap-2">
                   <span className="text-sm font-medium">API key</span>
                   <Input
                     type="password"
@@ -168,17 +175,20 @@ export function ProviderSettingsPanel({
             </div>
 
             {providers.length > 1 && (
-              <div className="mt-7 flex justify-end border-t pt-4">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onDeleteProvider(activeProvider.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 />
-                  Remove provider
-                </Button>
+              <div className="mt-7 pt-4">
+                <Separator className="mb-4" />
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDeleteProvider(activeProvider.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 />
+                    Remove provider
+                  </Button>
+                </div>
               </div>
             )}
           </div>

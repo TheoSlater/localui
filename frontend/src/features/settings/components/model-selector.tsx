@@ -2,11 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
 import { fetchAllModels, type ModelItem } from '@/services/models';
 import type { TextProvider } from '@/config/settings';
 import { useSettingsStore } from '@/stores/settings-store';
 import { toast } from '@/components/ui/toast';
+import { Badge } from '@/components/ui/badge';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -131,23 +132,19 @@ export function ModelSelector({ providers, activeModel, onSelect }: ModelSelecto
           <ChevronDown className="size-3.5 shrink-0" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[420px] rounded-2xl p-0">
-          <div className="space-y-2 p-2">
-            <div className="bg-muted flex gap-0.5 rounded-md p-0.5">
+          <div className="flex flex-col gap-2 p-2">
+            <ToggleGroup
+              value={[filter]}
+              onValueChange={([value]) => value && setFilter(value as Filter)}
+              className="bg-muted w-full rounded-md p-0.5"
+              size="sm"
+            >
               {(['all', 'local', 'external'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={cn(
-                    'rounded-md px-2.5 py-1 text-xs font-medium transition-[background-color,color,box-shadow] duration-(--motion-duration-quick) ease-(--motion-ease-spring)',
-                    filter === f
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
+                <ToggleGroupItem key={f} value={f} className="flex-1 text-xs">
                   {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
             <div className="relative">
               <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
               <Input
@@ -209,16 +206,9 @@ export function ModelSelector({ providers, activeModel, onSelect }: ModelSelecto
                         className="flex w-full items-center justify-between"
                       >
                         <span className="truncate font-medium">{row.model.id}</span>
-                        <span
-                          className={cn(
-                            'ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                            row.model.origin === 'local'
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-                          )}
-                        >
+                        <Badge variant={row.model.origin === 'local' ? 'secondary' : 'outline'}>
                           {row.model.origin === 'local' ? 'Local' : 'External'}
-                        </span>
+                        </Badge>
                       </DropdownMenuItem>
                     </div>
                   );

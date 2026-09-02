@@ -1,13 +1,21 @@
 import { Database, Search, Server, SlidersHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { TextProvider } from '@/config/settings';
 import { ProviderSettingsPanel } from './provider-settings-panel';
 import { DataControlsPanel } from './data-controls-panel';
-import { useDialogTransition } from '@/hooks/use-dialog-transition';
 
 const settingsSections = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
@@ -64,7 +72,6 @@ export function SettingsDialog({
   hasChats,
   onDeleteAllChats,
 }: SettingsDialogProps) {
-  const { visible, closing, requestClose } = useDialogTransition(open);
   const [section, setSection] = useState<SettingsSection>('providers');
   const [settingsSearch, setSettingsSearch] = useState('');
 
@@ -77,28 +84,22 @@ export function SettingsDialog({
     if (open) setSettingsSearch('');
   }, [open]);
 
-  const close = () => requestClose(onClose);
-
-  if (!visible) return null;
-
   return (
-    <div
-      className={`${closing ? 'opacity-0 duration-(--motion-duration-quick)' : 'animate-in fade-in-0 duration-(--motion-duration-fast)'} fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 transition-opacity ease-(--motion-ease-spring) sm:p-6`}
-      onMouseDown={(event) => event.target === event.currentTarget && close()}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-        className={`${closing ? 'scale-[var(--motion-scale-modal)] opacity-0 duration-(--motion-duration-quick)' : 'animate-in fade-in-0 zoom-in-[var(--motion-scale-modal)] duration-(--motion-duration-fast)'} bg-background border-border/50 grid h-[min(88vh,760px)] max-h-[calc(100vh-2rem)] w-[min(92vw,1160px)] max-w-[calc(100vw-1.5rem)] transform-gpu grid-rows-[4.25rem_minmax(0,1fr)] overflow-hidden rounded-2xl border shadow-2xl transition-[opacity,transform] ease-(--motion-ease-spring)`}
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className="bg-background text-foreground grid h-[min(88vh,760px)] max-h-[calc(100vh-2rem)] w-[min(92vw,1160px)] max-w-[calc(100vw-1.5rem)] grid-rows-[4.25rem_minmax(0,1fr)] gap-0 overflow-hidden rounded-2xl border p-0 shadow-2xl"
       >
         <header className="flex items-center justify-between px-5 sm:px-8">
-          <h1 id="settings-title" className="text-lg font-semibold tracking-tight">
-            Settings
-          </h1>
-          <Button variant="ghost" size="icon-sm" onClick={close} aria-label="Close settings">
+          <DialogTitle className="text-lg font-semibold tracking-tight">Settings</DialogTitle>
+          <DialogDescription className="sr-only">
+            Configure appearance, providers, and data controls.
+          </DialogDescription>
+          <DialogClose
+            render={<Button variant="ghost" size="icon-sm" aria-label="Close settings" />}
+          >
             <X />
-          </Button>
+          </DialogClose>
         </header>
 
         <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] md:grid-cols-[196px_minmax(0,1fr)] md:grid-rows-1">
@@ -155,8 +156,8 @@ export function SettingsDialog({
             )}
           </main>
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -202,8 +203,8 @@ function GeneralSettings({
   return (
     <div className="max-w-2xl">
       <h2 className="text-xl font-semibold tracking-tight">General</h2>
-      <div className="mt-8 space-y-8">
-        <label className="block max-w-md space-y-2">
+      <div className="mt-8 flex flex-col gap-8">
+        <label className="flex max-w-md flex-col gap-2">
           <span className="text-sm font-medium">Your name</span>
           <Input
             value={name}
@@ -212,9 +213,10 @@ function GeneralSettings({
             className="h-9 rounded-md"
           />
         </label>
-        <section className="border-t pt-6">
+        <section className="pt-6">
+          <Separator className="mb-6" />
           <h3 className="text-sm font-semibold">Appearance</h3>
-          <div className="mt-5 space-y-5">
+          <div className="mt-5 flex flex-col gap-5">
             <div className="flex max-w-md items-center justify-between gap-6">
               <span className="text-sm font-medium">Theme</span>
               <ThemeToggle />
@@ -229,21 +231,19 @@ function GeneralSettings({
                 className="h-9 w-12 cursor-pointer rounded-md border-0 bg-transparent p-0"
               />
             </label>
-            <label className="flex max-w-md items-center justify-between gap-6">
+            <div className="flex max-w-md items-center justify-between gap-6">
               <span>
                 <span className="block text-sm font-medium">Reduce transparency</span>
                 <span className="text-muted-foreground mt-1 block text-xs">
                   Use solid surfaces instead of translucent backgrounds.
                 </span>
               </span>
-              <input
+              <Switch
                 aria-label="Reduce transparency"
-                type="checkbox"
                 checked={reduceTransparency}
-                onChange={(event) => onReduceTransparencyChange(event.target.checked)}
-                className="size-4 shrink-0 accent-current"
+                onCheckedChange={(checked) => onReduceTransparencyChange(checked === true)}
               />
-            </label>
+            </div>
           </div>
         </section>
       </div>
