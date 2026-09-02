@@ -105,20 +105,20 @@ export function ChatWorkspace({
           bottomPadding={256}
         />
       </div>
-      {!atBottom && (
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label="Scroll to bottom"
-          onClick={() => setScrollToBottomRequest((value) => value + 1)}
-          className="border-border/70 bg-background/60 absolute bottom-40 left-1/2 z-20 -translate-x-1/2 rounded-full shadow-sm backdrop-blur-md"
-        >
-          <ArrowDown />
-        </Button>
-      )}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-4 pt-14 pb-6">
         <div className="pointer-events-auto mx-auto flex w-full max-w-2xl flex-col gap-3">
+          {!atBottom && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Scroll to bottom"
+              onClick={() => setScrollToBottomRequest((value) => value + 1)}
+              className="border-border/70 bg-background/60 mx-auto rounded-full shadow-sm backdrop-blur-md"
+            >
+              <ArrowDown />
+            </Button>
+          )}
           <ChatComposer
             value={input}
             onValueChange={onValueChange}
