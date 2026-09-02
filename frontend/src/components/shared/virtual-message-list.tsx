@@ -53,22 +53,18 @@ export function VirtualMessageList<T>({
     scrollMargin: 0,
   });
   const totalSize = virtualizer.getTotalSize();
+  const lastItem = items[items.length - 1];
 
   useEffect(() => {
     if (!scrollToBottomRequest || !scrollRef.current) return;
-    const frame = window.requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [scrollToBottomRequest]);
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    onAtBottomChange?.(true);
+  }, [onAtBottomChange, scrollToBottomRequest]);
 
   useEffect(() => {
     if (!autoScroll || !scrollRef.current) return;
-    const frame = window.requestAnimationFrame(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [autoScroll, items.length, totalSize]);
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [autoScroll, lastItem, totalSize]);
 
   useEffect(() => {
     if (!onAtBottomChange) return;
